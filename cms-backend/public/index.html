@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>CMS - Portal do Motorista</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="app" id="app">
+        <!-- Login Page -->
+        <div id="loginPage" class="page active">
+            <div class="auth-container">
+                <div class="auth-card glass">
+                    <div class="logo-section">
+                        <div class="logo-icon"><img src="logo_excava.png" alt="Excava Logo"
+                                style="width: 120px; height: 120px;"></div>
+                        <h1>Portal do Motorista</h1>
+                    </div>
+
+                    <!-- Login Form -->
+                    <div id="loginForm" class="form-section">
+                        <form id="loginFormElement">
+                            <div class="input-group">
+                                <label for="loginPlate">Placa do Veículo</label>
+                                <input type="text" id="loginPlate" placeholder="ABC-1234"
+                                    pattern="[A-Za-z]{3}-[0-9][A-Za-z0-9][0-9]{2}" required autocomplete="off">
+                                <span class="input-hint">Formato: ABC-1234 ou ABC-1D23</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="loginPassword">Senha</label>
+                                <input type="password" id="loginPassword" placeholder="••••••••" minlength="4" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-full">
+                                <span>Entrar</span>
+                                <span class="btn-loader hidden"></span>
+                            </button>
+                        </form>
+                        <div class="form-footer">
+                            <p>Primeiro acesso? <a href="#" id="showSignup">Cadastre-se</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Signup Form -->
+                    <div id="signupForm" class="form-section hidden">
+                        <form id="signupFormElement">
+                            <div class="input-group">
+                                <label for="signupName">Nome Completo</label>
+                                <input type="text" id="signupName" placeholder="Seu nome completo" minlength="2"
+                                    required>
+                            </div>
+                            <div class="input-group">
+                                <label for="signupCpf">CPF</label>
+                                <input type="text" id="signupCpf" placeholder="000.000.000-00" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="signupPhone">Telefone</label>
+                                <input type="tel" id="signupPhone" placeholder="(00) 00000-0000" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="signupPlate">Placa do Veículo</label>
+                                <input type="text" id="signupPlate" placeholder="ABC-1234"
+                                    pattern="[A-Za-z]{3}-[0-9][A-Za-z0-9][0-9]{2}" required autocomplete="off">
+                                <span class="input-hint">Formato: ABC-1234 ou ABC-1D23</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="signupPassword">Senha</label>
+                                <input type="password" id="signupPassword" placeholder="Mínimo 4 caracteres"
+                                    minlength="4" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-full">
+                                <span>Cadastrar</span>
+                                <span class="btn-loader hidden"></span>
+                            </button>
+                        </form>
+                        <div class="form-footer">
+                            <p>Já possui conta? <a href="#" id="showLogin">Entrar</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div id="authError" class="error-message hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Page (3 Buttons) -->
+        <div id="dashboardPage" class="page hidden">
+            <!-- Header -->
+            <header class="header glass">
+                <div class="header-left">
+                    <div class="logo-icon small"><img src="logo_excava.png" alt="Logo"
+                            style="width: 40px; height: 40px;"></div>
+                    <div class="header-title">
+                        <h1>ExcavaNorth</h1>
+                        <p id="welcomeText">Bem-vindo!</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <button id="logoutBtn" class="btn btn-outline">
+                        Sair
+                    </button>
+                </div>
+            </header>
+
+            <!-- Main Actions -->
+            <main class="main-actions">
+                <div class="actions-container">
+                    <button class="action-btn glass" id="btnComprovanteCarga">
+                        <span class="action-icon">📦</span>
+                        <span class="action-text">Comprovante de<br>Carga/Descarga</span>
+                    </button>
+
+                    <button class="action-btn glass" id="btnComprovanteAbastecimento">
+                        <span class="action-icon">⛽</span>
+                        <span class="action-text">Comprovante de<br>Abastecimento</span>
+                    </button>
+
+                    <button class="action-btn glass" id="btnExtrato">
+                        <span class="action-icon">📊</span>
+                        <span class="action-text">Extrato</span>
+                    </button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Extrato Page -->
+        <div id="extratoPage" class="page hidden">
+            <!-- Header -->
+            <header class="header glass">
+                <div class="header-left">
+                    <button id="backToMain" class="btn btn-icon">
+                        ←
+                    </button>
+                    <div class="header-title">
+                        <h1>Extrato</h1>
+                        <p id="extratoWelcome">Resumo Financeiro</p>
+                    </div>
+                </div>
+                <div class="header-center"><img src="logo_excava.png" alt="Logo" style="width: 80px; height: 80px;">
+                </div>
+                <div class="header-right">
+                    <button id="extratoLogoutBtn" class="btn btn-outline">
+                        Sair
+                    </button>
+                </div>
+            </header>
+
+            <!-- Extrato Content -->
+            <main class="extrato-content">
+                <!-- Summary Cards -->
+                <section class="summary-cards-row">
+                    <div class="summary-card-sm glass">
+                        <span class="card-label">Total Fretes</span>
+                        <span class="card-value" id="totalFretesValue">R$ 0,00</span>
+                    </div>
+                    <div class="summary-card-sm glass card-received">
+                        <span class="card-label">Total Recebido</span>
+                        <span class="card-value" id="totalRecebidoValue">R$ 0,00</span>
+                    </div>
+                    <div class="summary-card-sm glass card-negative">
+                        <span class="card-label">Abastecimentos</span>
+                        <span class="card-value" id="totalAbastecimentosValue">R$ 0,00</span>
+                    </div>
+                    <div class="summary-card-sm glass card-negative">
+                        <span class="card-label">Outros Insumos</span>
+                        <span class="card-value" id="totalOutrosInsumosValue">R$ 0,00</span>
+                    </div>
+                    <div class="summary-card-sm glass highlight">
+                        <span class="card-label">Total a Receber</span>
+                        <span class="card-value" id="totalAReceberValue">R$ 0,00</span>
+                    </div>
+                </section>
+
+                <!-- Fretes Section -->
+                <section class="extrato-section glass">
+                    <h2>📦 Fretes</h2>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>KM</th>
+                                    <th>Tons</th>
+                                    <th>Valor</th>
+                                    <th>Carga</th>
+                                    <th>Descarga</th>
+                                </tr>
+                            </thead>
+                            <tbody id="extratoFretesBody">
+                                <tr>
+                                    <td colspan="6" class="loading">Carregando...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Abastecimentos Section -->
+                <section class="extrato-section glass">
+                    <h2>⛽ Abastecimentos</h2>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Litros</th>
+                                    <th>Preço/L</th>
+                                    <th>Valor</th>
+                                    <th>Comprov.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="extratoAbastecimentosBody">
+                                <tr>
+                                    <td colspan="5" class="loading">Carregando...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Outros Insumos Section -->
+                <section class="extrato-section glass">
+                    <h2>📋 Outros Insumos</h2>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Qtd</th>
+                                    <th>Descrição</th>
+                                    <th>Preço Un.</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="extratoOutrosInsumosBody">
+                                <tr>
+                                    <td colspan="5" class="loading">Carregando...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Pagamentos Recebidos Section -->
+                <section class="extrato-section glass">
+                    <h2>💰 Pagamentos Recebidos</h2>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Período</th>
+                                    <th>Valor</th>
+                                    <th>Comprovante</th>
+                                </tr>
+                            </thead>
+                            <tbody id="extratoPagamentosBody">
+                                <tr>
+                                    <td colspan="3" class="loading">Carregando...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Camera Modal for Comprovante de Carga/Descarga -->
+        <div id="cameraModalCarga" class="modal hidden">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content glass camera-modal">
+                <div class="modal-header">
+                    <h2>📦 Comprovante de Carga/Descarga</h2>
+                    <button class="modal-close" id="closeCameraModalCarga">&times;</button>
+                </div>
+                <div class="modal-body camera-body">
+                    <video id="cameraVideoCarga" autoplay playsinline></video>
+                    <canvas id="cameraCanvasCarga" class="hidden"></canvas>
+                    <img id="photoPreviewCarga" class="photo-preview hidden">
+                </div>
+                <div class="modal-footer camera-footer">
+                    <div class="camera-type-select">
+                        <button class="btn btn-sm type-btn active" data-type="carga" id="typeCargaBtn">Carga</button>
+                        <button class="btn btn-sm type-btn" data-type="descarga" id="typeDescargaBtn">Descarga</button>
+                    </div>
+                    <div class="camera-actions">
+                        <button class="btn btn-primary btn-round" id="capturePhotoCarga">📸</button>
+                        <button class="btn btn-outline btn-round hidden" id="retakePhotoCarga">🔄</button>
+                        <button class="btn btn-success btn-round hidden" id="sendPhotoCarga">✓</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Camera Modal for Comprovante de Abastecimento -->
+        <div id="cameraModalAbast" class="modal hidden">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content glass camera-modal">
+                <div class="modal-header">
+                    <h2>⛽ Comprovante de Abastecimento</h2>
+                    <button class="modal-close" id="closeCameraModalAbast">&times;</button>
+                </div>
+                <div class="modal-body camera-body">
+                    <video id="cameraVideoAbast" autoplay playsinline></video>
+                    <canvas id="cameraCanvasAbast" class="hidden"></canvas>
+                    <img id="photoPreviewAbast" class="photo-preview hidden">
+                </div>
+                <div class="modal-footer camera-footer">
+                    <div class="camera-actions">
+                        <button class="btn btn-primary btn-round" id="capturePhotoAbast">📸</button>
+                        <button class="btn btn-outline btn-round hidden" id="retakePhotoAbast">🔄</button>
+                        <button class="btn btn-success btn-round hidden" id="sendPhotoAbast">✓</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success/Error Toast -->
+        <div id="toast" class="toast hidden">
+            <span id="toastMessage"></span>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

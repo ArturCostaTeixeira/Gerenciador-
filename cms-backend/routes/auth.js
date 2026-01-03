@@ -1,0 +1,219 @@
+const express = require('express');
+const router = express.Router();
+const Driver = require('../models/driver');
+const Admin = require('../models/admin');
+const { isValidPlate, normalizePlate, isValidCPF } = require('../utils/validators');
+const { generateToken, verifyToken } = require('../middleware/auth');
+
+/**
+ * POST /api/auth/driver/signup
+ * Driver sign-up (one-time registration)
+ * Creates driver with name, plate, password, phone, and CPF
+ */
+router.post('/driver/signup', (req, res) => {
+    try {
+        const { name, plate, password, phone, cpf } = req.body;
+
+        // Validate input
+        if (!name || !plate || !password || !phone || !cpf) {
+            return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
+        }
+
+        if (name.trim().length < 2) {
+            return res.status(400).json({ error: 'Nome deve ter pelo menos 2 caracteres' });
+        }
+
+        if (password.length < 4) {
+            return res.status(400).json({ error: 'Senha deve ter pelo menos 4 caracteres' });
+        }
+
+        // Validate CPF (digits and checksum)
+        if (!isValidCPF(cpf)) {
+            return res.status(400).json({ error: 'CPF inválido. Verifique os números.' });
+        }
+
+        // Validate phone format (at least 10 digits)
+        const phoneClean = phone.replace(/\D/g, '');
+        const cpfClean = cpf.replace(/\D/g, '');
+        if (phoneClean.length < 10) {
+            return res.status(400).json({ error: 'Telefone inválido. Deve conter pelo menos 10 dígitos' });
+        }
+
+        if (!isValidPlate(plate)) {
+            return res.status(400).json({ error: 'Formato de placa inválido. Use ABC-1234 ou ABC-1D23' });
+        }
+
+        const normalizedPlate = normalizePlate(plate);
+
+        // Check if plate already exists
+        const existingPlate = Driver.findByPlate(normalizedPlate);
+        if (existingPlate) {
+            return res.status(409).json({ error: 'Placa já cadastrada no sistema' });
+        }
+
+        // Check if CPF already exists
+        const existingCpf = Driver.findByCpf(cpfClean);
+        if (existingCpf) {
+            return res.status(409).json({ error: 'CPF já cadastrado no sistema' });
+        }
+
+        // Check if Phone already exists
+        const existingPhone = Driver.findByPhone(phoneClean);
+        if (existingPhone) {
+            return res.status(409).json({ error: 'Telefone já cadastrado no sistema' });
+        }
+
+        // Create driver with password, phone, and CPF
+        const driver = Driver.create({
+            name: name.trim(),
+            plate: normalizedPlate,
+            price_per_km_ton: 0, // Default, admin will update
+            client: null,
+            password: password,
+            phone: phoneClean,
+            cpf: cpfClean
+        });
+
+        // Generate JWT token for immediate login
+        const token = generateToken({
+            id: driver.id,
+            name: driver.name,
+            plate: driver.plate
+        }, 'driver');
+
+        res.status(201).json({
+            message: 'Sign-up successful',
+            token,
+            driver: {
+                id: driver.id,
+                name: driver.name,
+                plate: driver.plate
+            }
+        });
+    } catch (error) {
+        console.error('Driver signup error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * POST /api/auth/driver/login
+ * Driver login with plate and password
+ * Returns JWT token
+ */
+router.post('/driver/login', (req, res) => {
+    try {
+        const { plate, password } = req.body;
+
+        // Validate input
+        if (!plate || !password) {
+            return res.status(400).json({ error: 'Plate and password are required' });
+        }
+
+        if (!isValidPlate(plate)) {
+            return res.status(400).json({ error: 'Invalid plate format. Use ABC-1234 or ABC-1D23' });
+        }
+
+        const normalizedPlate = normalizePlate(plate);
+
+        // Verify password
+        const driver = Driver.verifyPassword(normalizedPlate, password);
+
+        if (!driver) {
+            return res.status(401).json({ error: 'Invalid plate or password' });
+        }
+
+        if (!driver.active) {
+            return res.status(401).json({ error: 'Driver account is inactive' });
+        }
+
+        // Generate JWT token
+        const token = generateToken({
+            id: driver.id,
+            name: driver.name,
+            plate: driver.plate
+        }, 'driver');
+
+        res.json({
+            message: 'Login successful',
+            token,
+            driver: {
+                id: driver.id,
+                name: driver.name,
+                plate: driver.plate
+            }
+        });
+    } catch (error) {
+        console.error('Driver login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * POST /api/auth/admin/login
+ * Admin login with username and password
+ * Returns JWT token
+ */
+router.post('/admin/login', (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        // Validate input
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required' });
+        }
+
+        const admin = Admin.verifyCredentials(username, password);
+
+        if (!admin) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        // Generate JWT token
+        const token = generateToken({
+            id: admin.id,
+            username: admin.username
+        }, 'admin');
+
+        res.json({
+            message: 'Login successful',
+            token,
+            admin: {
+                id: admin.id,
+                username: admin.username
+            }
+        });
+    } catch (error) {
+        console.error('Admin login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * GET /api/auth/verify
+ * Verify token and return user info
+ */
+router.get('/verify', (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ valid: false, error: 'No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = verifyToken(token);
+
+    if (!decoded) {
+        return res.status(401).json({ valid: false, error: 'Invalid or expired token' });
+    }
+
+    res.json({
+        valid: true,
+        type: decoded.type,
+        user: {
+            id: decoded.id,
+            ...(decoded.type === 'admin' ? { username: decoded.username } : { name: decoded.name, plate: decoded.plate })
+        }
+    });
+});
+
+module.exports = router;

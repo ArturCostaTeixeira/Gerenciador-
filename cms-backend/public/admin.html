@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CMS - Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="admin-styles.css">
+</head>
+
+<body>
+    <div class="app" id="app">
+        <!-- Login Page -->
+        <div id="loginPage" class="page active">
+            <div class="auth-container">
+                <div class="auth-card glass">
+                    <div class="logo-section">
+                        <div class="logo-icon"><img src="logo_excava.png" alt="Logo"
+                                style="width: 100px; height: 100px;"></div>
+                        <h1>Portal do Administrador</h1>
+                    </div>
+                    <form id="loginForm" class="form-section">
+                        <div class="input-group">
+                            <label for="loginEmail">Email</label>
+                            <input type="text" id="loginEmail" placeholder="admin" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="loginPassword">Senha</label>
+                            <input type="password" id="loginPassword" placeholder="••••••••" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full">
+                            <span>Entrar</span>
+                            <span class="btn-loader hidden"></span>
+                        </button>
+                    </form>
+                    <div id="authError" class="error-message hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Page -->
+        <div id="dashboardPage" class="page hidden">
+            <!-- Sidebar -->
+            <aside class="sidebar glass">
+                <div class="sidebar-header">
+                    <div class="logo-icon small"><img src="logo_excava.png" alt="Logo"
+                            style="width: 40px; height: 40px;"></div>
+                    <span class="sidebar-title">Administrador</span>
+                </div>
+                <nav class="sidebar-nav">
+                    <button class="nav-item active" data-page="drivers">
+                        <span class="nav-icon">👤</span>
+                        <span class="nav-text">Motoristas</span>
+                    </button>
+                    <button class="nav-item" data-page="freights">
+                        <span class="nav-icon">📦</span>
+                        <span class="nav-text">Fretes</span>
+                    </button>
+                    <button class="nav-item" data-page="abastecimentos">
+                        <span class="nav-icon">⛽</span>
+                        <span class="nav-text">Abastecimentos</span>
+                    </button>
+                    <button class="nav-item" data-page="outrosinsumos">
+                        <span class="nav-icon">📋</span>
+                        <span class="nav-text">Outros Insumos</span>
+                    </button>
+                    <button class="nav-item" data-page="clients">
+                        <span class="nav-icon">🏢</span>
+                        <span class="nav-text">Clientes</span>
+                    </button>
+                </nav>
+                <div class="sidebar-footer">
+                    <button id="logoutBtn" class="btn btn-outline btn-full">Sair</button>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <!-- Drivers Page -->
+                <section id="driversPage" class="content-page active">
+                    <div class="page-header">
+                        <h1>👤 Motoristas</h1>
+                        <button class="btn btn-primary" id="addDriverBtn">+ Novo Motorista</button>
+                    </div>
+                    <div class="filters glass">
+                        <input type="text" id="driverSearch" class="filter-input" placeholder="Buscar por nome...">
+                    </div>
+                    <div class="card glass">
+                        <table class="data-table" id="driversTable">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>CPF</th>
+                                    <th>Telefone</th>
+                                    <th>Placa</th>
+                                    <th>A Pagar</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="driversTableBody"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Driver Payments Page -->
+                <section id="driverPaymentsPage" class="content-page hidden">
+                    <div class="page-header">
+                        <button class="btn btn-outline" id="backToDriversBtn">← Voltar</button>
+                        <h1 id="driverPaymentsTitle">💰 Pagamentos</h1>
+                    </div>
+
+                    <!-- Main Tabs: Não Pagos / Pagos -->
+                    <div class="payment-tabs">
+                        <button class="payment-tab active" data-tab="unpaid">Não Pagos</button>
+                        <button class="payment-tab" data-tab="paid">Pagos</button>
+                    </div>
+
+                    <!-- Unpaid Freights Tab -->
+                    <div id="unpaidTab" class="payment-tab-content">
+                        <div class="card glass">
+                            <div class="card-header-payment">
+                                <h2>Fretes Não Pagos</h2>
+                                <button class="btn btn-primary" id="generatePaymentBtn">Gerar Pagamento</button>
+                            </div>
+                            <div class="table-container">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Motorista</th>
+                                            <th>Valor</th>
+                                            <th>Pago</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="unpaidFreightsBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Paid/Payment History Tab -->
+                    <div id="paidTab" class="payment-tab-content hidden">
+                        <div class="card glass">
+                            <h2 style="margin-bottom:1.5rem;">Pagamentos Realizados</h2>
+                            <div class="table-container">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Período</th>
+                                            <th>Valor</th>
+                                            <th>Comprovante</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="paymentsHistoryBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Freights Page -->
+                <section id="freightsPage" class="content-page hidden">
+                    <div class="page-header">
+                        <h1>📦 Fretes</h1>
+                        <button class="btn btn-primary" id="addFreightBtn">+ Novo Frete</button>
+                    </div>
+                    <div class="filters glass">
+                        <select id="freightDriverFilter" class="filter-input">
+                            <option value="">Todos os motoristas</option>
+                        </select>
+                        <select id="freightClientFilter" class="filter-input">
+                            <option value="">Todos os clientes</option>
+                        </select>
+                        <input type="date" id="freightDateFilter" class="filter-input">
+                    </div>
+                    <div class="card glass">
+                        <table class="data-table" id="freightsTable">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Motorista</th>
+                                    <th>Cliente</th>
+                                    <th>KM</th>
+                                    <th>Tons</th>
+                                    <th>Preço/km/t</th>
+                                    <th>Valor</th>
+                                    <th>Carga</th>
+                                    <th>Descarga</th>
+                                    <th>Pago</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="freightsTableBody"></tbody>
+                        </table>
+                        <div class="pagination-container" id="freightsPagination">
+                            <div class="rows-per-page">
+                                <span>Linhas:</span>
+                                <select id="freightsPageSize" class="filter-input-sm">
+                                    <option value="10">10</option>
+                                    <option value="20">20</option>
+                                    <option value="30">30</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </div>
+                            <div class="page-controls">
+                                <button class="btn-sm" id="freightsPrevBtn">❮</button>
+                                <span id="freightsPageInfo">Pag 1</span>
+                                <button class="btn-sm" id="freightsNextBtn">❯</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Abastecimentos Page -->
+                <section id="abastecimentosPage" class="content-page hidden">
+                    <div class="page-header">
+                        <h1>⛽ Abastecimentos</h1>
+                        <button class="btn btn-primary" id="addAbastecimentoBtn">+ Novo Abastecimento</button>
+                    </div>
+                    <div class="filters glass">
+                        <select id="abastDriverFilter" class="filter-input">
+                            <option value="">Todos os motoristas</option>
+                        </select>
+                        <select id="abastClientFilter" class="filter-input">
+                            <option value="">Todos os clientes</option>
+                        </select>
+                        <input type="date" id="abastDateFilter" class="filter-input">
+                    </div>
+                    <div class="card glass">
+                        <table class="data-table" id="abastecimentosTable">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Motorista</th>
+                                    <th>Cliente</th>
+                                    <th>Litros</th>
+                                    <th>Preço/L</th>
+                                    <th>Valor</th>
+                                    <th>Comprovante</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="abastecimentosTableBody"></tbody>
+                        </table>
+                        <div class="pagination-container" id="abastecimentosPagination">
+                            <div class="rows-per-page">
+                                <span>Linhas:</span>
+                                <select id="abastecimentosPageSize" class="filter-input-sm">
+                                    <option value="10">10</option>
+                                    <option value="20">20</option>
+                                    <option value="30">30</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </div>
+                            <div class="page-controls">
+                                <button class="btn-sm" id="abastecimentosPrevBtn">❮</button>
+                                <span id="abastecimentosPageInfo">Pag 1</span>
+                                <button class="btn-sm" id="abastecimentosNextBtn">❯</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Outros Insumos Page -->
+                <section id="outrosinsumosPage" class="content-page hidden">
+                    <div class="page-header">
+                        <h1>📋 Outros Insumos</h1>
+                        <button class="btn btn-primary" id="addOutrosInsumoBtn">+ Novo Insumo</button>
+                    </div>
+                    <div class="filters glass">
+                        <select id="outrosDriverFilter" class="filter-input">
+                            <option value="">Todos os motoristas</option>
+                        </select>
+                        <select id="outrosClientFilter" class="filter-input">
+                            <option value="">Todos os clientes</option>
+                        </select>
+                        <input type="date" id="outrosDateFilter" class="filter-input">
+                    </div>
+                    <div class="card glass">
+                        <table class="data-table" id="outrosInsumosTable">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Quantidade</th>
+                                    <th>Descrição</th>
+                                    <th>Preço Unitário</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="outrosInsumosTableBody"></tbody>
+                        </table>
+                        <div class="pagination-container" id="outrosInsumosPagination">
+                            <div class="rows-per-page">
+                                <span>Linhas:</span>
+                                <select id="outrosInsumosPageSize" class="filter-input-sm">
+                                    <option value="10">10</option>
+                                    <option value="20">20</option>
+                                    <option value="30">30</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </div>
+                            <div class="page-controls">
+                                <button class="btn-sm" id="outrosInsumosPrevBtn">❮</button>
+                                <span id="outrosInsumosPageInfo">Pag 1</span>
+                                <button class="btn-sm" id="outrosInsumosNextBtn">❯</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Clients Page -->
+                <section id="clientsPage" class="content-page hidden">
+                    <div class="page-header">
+                        <h1>🏢 Clientes</h1>
+                        <button class="btn btn-primary" id="addClientBtn">+ Novo Cliente</button>
+                    </div>
+                    <div id="clientsListView">
+                        <div class="card glass">
+                            <table class="data-table" id="clientsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Cliente</th>
+                                        <th>Motoristas</th>
+                                        <th>Fretes</th>
+                                        <th>Total Recebido</th>
+                                        <th>A Receber</th>
+                                        <th>Lucro</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clientsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div id="clientDetailView" class="hidden">
+                        <button class="btn btn-outline" id="backToClients">← Voltar</button>
+                        <div class="client-detail-header">
+                            <h2 id="clientDetailName"></h2>
+                        </div>
+                        <div class="summary-cards">
+                            <div class="card summary-card glass">
+                                <div class="card-icon">👤</div>
+                                <div class="card-content">
+                                    <span class="card-label">Motoristas</span>
+                                    <span class="card-value" id="clientDriverCount">0</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass">
+                                <div class="card-icon">📦</div>
+                                <div class="card-content">
+                                    <span class="card-label">Fretes</span>
+                                    <span class="card-value" id="clientFreightCount">0</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass">
+                                <div class="card-icon">✅</div>
+                                <div class="card-content">
+                                    <span class="card-label">Total Recebido</span>
+                                    <span class="card-value value-positive" id="clientReceivedValue">R$ 0</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass">
+                                <div class="card-icon">⏳</div>
+                                <div class="card-content">
+                                    <span class="card-label">A Receber</span>
+                                    <span class="card-value" id="clientToReceive">R$ 0</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass">
+                                <div class="card-icon">⛽</div>
+                                <div class="card-content">
+                                    <span class="card-label">Abastecimentos</span>
+                                    <span class="card-value value-negative" id="clientAbastValue">-R$ 0</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass">
+                                <div class="card-icon">📋</div>
+                                <div class="card-content">
+                                    <span class="card-label">Outros Insumos</span>
+                                    <span class="card-value value-negative" id="clientOutrosInsumosValue">-R$ 0</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass highlight">
+                                <div class="card-icon">💰</div>
+                                <div class="card-content">
+                                    <span class="card-label">Lucro</span>
+                                    <span class="card-value" id="clientLucro">R$ 0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tabs glass">
+                            <button class="tab active" data-tab="clientFreights">Fretes</button>
+                            <button class="tab" data-tab="clientAbastecimentos">Abastecimentos</button>
+                            <button class="tab" data-tab="clientOutrosInsumos">Outros Insumos</button>
+                        </div>
+                        <div id="clientFreightsSection" class="card glass">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Motorista</th>
+                                        <th>KM</th>
+                                        <th>Tons</th>
+                                        <th>Valor</th>
+                                        <th>Pago</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clientFreightsBody"></tbody>
+                            </table>
+                        </div>
+                        <div id="clientAbastecimentosSection" class="card glass hidden">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Motorista</th>
+                                        <th>Litros</th>
+                                        <th>Preço/L</th>
+                                        <th>Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clientAbastecimentosBody"></tbody>
+                            </table>
+                        </div>
+                        <div id="clientOutrosInsumosSection" class="card glass hidden">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Quantidade</th>
+                                        <th>Descrição</th>
+                                        <th>Preço Unitário</th>
+                                        <th>Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clientOutrosInsumosBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Modal -->
+        <div id="modal" class="modal hidden">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content glass">
+                <div class="modal-header">
+                    <h2 id="modalTitle">Modal</h2>
+                    <button class="modal-close" id="modalClose">&times;</button>
+                </div>
+                <form id="modalForm" class="modal-body"></form>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="modalCancel">Cancelar</button>
+                    <button type="submit" form="modalForm" class="btn btn-primary" id="modalSubmit">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin-app.js"></script>
+</body>
+
+</html>
