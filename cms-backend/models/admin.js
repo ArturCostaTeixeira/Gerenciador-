@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const { execute, query, queryOne } = require('../config/database');
 const bcrypt = require('bcryptjs');
 
 const Admin = {
@@ -7,8 +7,8 @@ const Admin = {
      * @param {string} username - Admin username
      * @returns {Object|null} - Admin or null
      */
-    findByUsername(username) {
-        return db.prepare('SELECT * FROM admins WHERE username = ?').get(username);
+    async findByUsername(username) {
+        return queryOne('SELECT * FROM admins WHERE username = ?', [username]);
     },
 
     /**
@@ -17,8 +17,8 @@ const Admin = {
      * @param {string} password - Plain password
      * @returns {Object|null} - Admin (without password) or null
      */
-    verifyCredentials(username, password) {
-        const admin = this.findByUsername(username);
+    async verifyCredentials(username, password) {
+        const admin = await this.findByUsername(username);
         if (!admin) return null;
 
         const valid = bcrypt.compareSync(password, admin.password);
@@ -35,12 +35,11 @@ const Admin = {
      * @param {string} password - Plain password
      * @returns {Object} - Created admin (without password)
      */
-    create(username, password) {
+    async create(username, password) {
         const hashedPassword = bcrypt.hashSync(password, 10);
-        const stmt = db.prepare('INSERT INTO admins (username, password) VALUES (?, ?)');
-        const result = stmt.run(username, hashedPassword);
+        const result = await execute('INSERT INTO admins (username, password) VALUES (?, ?)', [username, hashedPassword]);
 
-        const admin = db.prepare('SELECT id, username, created_at FROM admins WHERE id = ?').get(result.lastInsertRowid);
+        const admin = await queryOne('SELECT id, username, created_at FROM admins WHERE id = ?', [result.lastInsertRowid]);
         return admin;
     }
 };

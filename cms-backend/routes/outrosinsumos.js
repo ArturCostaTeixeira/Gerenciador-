@@ -15,7 +15,7 @@ adminRouter.use(requireAdmin);
  * POST /api/admin/outrosinsumos
  * Create outros insumo for a driver (admin only)
  */
-adminRouter.post('/', (req, res) => {
+adminRouter.post('/', async (req, res) => {
     try {
         const { driver_id, date, quantity, description, unit_price } = req.body;
 
@@ -41,12 +41,12 @@ adminRouter.post('/', (req, res) => {
         }
 
         // Verify driver exists
-        const driver = Driver.findById(driver_id);
+        const driver = await Driver.findById(driver_id);
         if (!driver) {
             return res.status(404).json({ error: 'Driver not found' });
         }
 
-        const outrosInsumo = OutrosInsumo.create({ driver_id, date, quantity, description: description || '', unit_price });
+        const outrosInsumo = await OutrosInsumo.create({ driver_id, date, quantity, description: description || '', unit_price });
         res.status(201).json(outrosInsumo);
     } catch (error) {
         console.error('Create outros insumo error:', error);
@@ -58,7 +58,7 @@ adminRouter.post('/', (req, res) => {
  * GET /api/admin/outrosinsumos
  * List all outros insumos with optional filters
  */
-adminRouter.get('/', (req, res) => {
+adminRouter.get('/', async (req, res) => {
     try {
         const filters = {
             driver_id: req.query.driver_id,
@@ -67,7 +67,7 @@ adminRouter.get('/', (req, res) => {
             date_to: req.query.date_to
         };
 
-        const outrosInsumos = OutrosInsumo.findAll(filters);
+        const outrosInsumos = await OutrosInsumo.findAll(filters);
         res.json(outrosInsumos);
     } catch (error) {
         console.error('List outros insumos error:', error);
@@ -79,9 +79,9 @@ adminRouter.get('/', (req, res) => {
  * GET /api/admin/outrosinsumos/:id
  * Get outros insumo by ID
  */
-adminRouter.get('/:id', (req, res) => {
+adminRouter.get('/:id', async (req, res) => {
     try {
-        const outrosInsumo = OutrosInsumo.findById(req.params.id);
+        const outrosInsumo = await OutrosInsumo.findById(req.params.id);
         if (!outrosInsumo) {
             return res.status(404).json({ error: 'Outros insumo not found' });
         }
@@ -96,14 +96,14 @@ adminRouter.get('/:id', (req, res) => {
  * DELETE /api/admin/outrosinsumos/:id
  * Delete outros insumo
  */
-adminRouter.delete('/:id', (req, res) => {
+adminRouter.delete('/:id', async (req, res) => {
     try {
-        const outrosInsumo = OutrosInsumo.findById(req.params.id);
+        const outrosInsumo = await OutrosInsumo.findById(req.params.id);
         if (!outrosInsumo) {
             return res.status(404).json({ error: 'Outros insumo not found' });
         }
 
-        OutrosInsumo.delete(req.params.id);
+        await OutrosInsumo.delete(req.params.id);
         res.json({ message: 'Outros insumo deleted successfully' });
     } catch (error) {
         console.error('Delete outros insumo error:', error);
@@ -121,7 +121,7 @@ driverRouter.use(requireDriver);
  * GET /api/driver/outrosinsumos
  * Get logged-in driver's outros insumos
  */
-driverRouter.get('/', (req, res) => {
+driverRouter.get('/', async (req, res) => {
     try {
         const driverId = req.driver.id;
         const filters = {
@@ -129,8 +129,8 @@ driverRouter.get('/', (req, res) => {
             date_to: req.query.date_to
         };
 
-        const outrosInsumos = OutrosInsumo.findByDriver(driverId, filters);
-        const stats = OutrosInsumo.getDriverStats(driverId);
+        const outrosInsumos = await OutrosInsumo.findByDriver(driverId, filters);
+        const stats = await OutrosInsumo.getDriverStats(driverId);
 
         res.json({
             outrosInsumos,

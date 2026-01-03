@@ -57,7 +57,7 @@ adminRouter.use(requireAdmin);
 adminRouter.post('/', upload.fields([
     { name: 'comprovante_carga', maxCount: 1 },
     { name: 'comprovante_descarga', maxCount: 1 }
-]), (req, res) => {
+]), async (req, res) => {
     try {
         const { driver_id, date, km, tons, price_per_km_ton, client } = req.body;
 
@@ -91,7 +91,7 @@ adminRouter.post('/', upload.fields([
         }
 
         // Verify driver exists
-        const driver = Driver.findById(driver_id);
+        const driver = await Driver.findById(driver_id);
         if (!driver) {
             return res.status(404).json({ error: 'Driver not found' });
         }
@@ -109,7 +109,7 @@ adminRouter.post('/', upload.fields([
             }
         }
 
-        const freight = Freight.create({
+        const freight = await Freight.create({
             driver_id: parseInt(driver_id),
             date,
             km: parseFloat(km),
@@ -133,10 +133,10 @@ adminRouter.post('/', upload.fields([
 adminRouter.put('/:id', upload.fields([
     { name: 'comprovante_carga', maxCount: 1 },
     { name: 'comprovante_descarga', maxCount: 1 }
-]), (req, res) => {
+]), async (req, res) => {
     try {
         const freightId = parseInt(req.params.id);
-        const freight = Freight.findById(freightId);
+        const freight = await Freight.findById(freightId);
 
         if (!freight) {
             return res.status(404).json({ error: 'Freight not found' });
@@ -171,7 +171,7 @@ adminRouter.put('/:id', upload.fields([
             updateData.status = 'complete';
         }
 
-        const updatedFreight = Freight.update(freightId, updateData);
+        const updatedFreight = await Freight.update(freightId, updateData);
         res.json(updatedFreight);
     } catch (error) {
         console.error('Update freight error:', error);
@@ -183,7 +183,7 @@ adminRouter.put('/:id', upload.fields([
  * GET /api/admin/freights
  * List all freights with optional filters
  */
-adminRouter.get('/', (req, res) => {
+adminRouter.get('/', async (req, res) => {
     try {
         const filters = {
             driver_id: req.query.driver_id,
@@ -192,7 +192,7 @@ adminRouter.get('/', (req, res) => {
             status: req.query.status
         };
 
-        const freights = Freight.findAll(filters);
+        const freights = await Freight.findAll(filters);
         res.json(freights);
     } catch (error) {
         console.error('List freights error:', error);
@@ -205,9 +205,9 @@ adminRouter.get('/', (req, res) => {
  * Get unpaid totals for all drivers
  * NOTE: This must be defined BEFORE /:id route
  */
-adminRouter.get('/unpaid-totals', (req, res) => {
+adminRouter.get('/unpaid-totals', async (req, res) => {
     try {
-        const unpaidTotals = Freight.getAllUnpaidTotals();
+        const unpaidTotals = await Freight.getAllUnpaidTotals();
         res.json(unpaidTotals);
     } catch (error) {
         console.error('Get unpaid totals error:', error);
@@ -219,9 +219,9 @@ adminRouter.get('/unpaid-totals', (req, res) => {
  * GET /api/admin/freights/:id
  * Get freight by ID
  */
-adminRouter.get('/:id', (req, res) => {
+adminRouter.get('/:id', async (req, res) => {
     try {
-        const freight = Freight.findById(req.params.id);
+        const freight = await Freight.findById(req.params.id);
         if (!freight) {
             return res.status(404).json({ error: 'Freight not found' });
         }
@@ -236,14 +236,14 @@ adminRouter.get('/:id', (req, res) => {
  * DELETE /api/admin/freights/:id
  * Delete freight
  */
-adminRouter.delete('/:id', (req, res) => {
+adminRouter.delete('/:id', async (req, res) => {
     try {
-        const freight = Freight.findById(req.params.id);
+        const freight = await Freight.findById(req.params.id);
         if (!freight) {
             return res.status(404).json({ error: 'Freight not found' });
         }
 
-        Freight.delete(req.params.id);
+        await Freight.delete(req.params.id);
         res.json({ message: 'Freight deleted successfully' });
     } catch (error) {
         console.error('Delete freight error:', error);
@@ -255,15 +255,15 @@ adminRouter.delete('/:id', (req, res) => {
  * PATCH /api/admin/freights/:id/toggle-paid
  * Toggle paid status for a freight (payment TO driver)
  */
-adminRouter.patch('/:id/toggle-paid', (req, res) => {
+adminRouter.patch('/:id/toggle-paid', async (req, res) => {
     try {
-        const freight = Freight.findById(req.params.id);
+        const freight = await Freight.findById(req.params.id);
         if (!freight) {
             return res.status(404).json({ error: 'Freight not found' });
         }
 
         const newPaidStatus = !freight.paid;
-        const updated = Freight.update(req.params.id, { paid: newPaidStatus });
+        const updated = await Freight.update(req.params.id, { paid: newPaidStatus });
         res.json(updated);
     } catch (error) {
         console.error('Toggle paid error:', error);
@@ -275,15 +275,15 @@ adminRouter.patch('/:id/toggle-paid', (req, res) => {
  * PATCH /api/admin/freights/:id/toggle-client-paid
  * Toggle client_paid status for a freight (payment FROM client)
  */
-adminRouter.patch('/:id/toggle-client-paid', (req, res) => {
+adminRouter.patch('/:id/toggle-client-paid', async (req, res) => {
     try {
-        const freight = Freight.findById(req.params.id);
+        const freight = await Freight.findById(req.params.id);
         if (!freight) {
             return res.status(404).json({ error: 'Freight not found' });
         }
 
         const newClientPaidStatus = !freight.client_paid;
-        const updated = Freight.update(req.params.id, { client_paid: newClientPaidStatus });
+        const updated = await Freight.update(req.params.id, { client_paid: newClientPaidStatus });
         res.json(updated);
     } catch (error) {
         console.error('Toggle client paid error:', error);
@@ -302,7 +302,7 @@ driverRouter.use(requireDriver);
  * GET /api/driver/freights
  * Get logged-in driver's freights
  */
-driverRouter.get('/', (req, res) => {
+driverRouter.get('/', async (req, res) => {
     try {
         const driverId = req.driver.id;
         const filters = {
@@ -310,8 +310,8 @@ driverRouter.get('/', (req, res) => {
             date_to: req.query.date_to
         };
 
-        const freights = Freight.findByDriver(driverId, filters);
-        const stats = Freight.getDriverStats(driverId);
+        const freights = await Freight.findByDriver(driverId, filters);
+        const stats = await Freight.getDriverStats(driverId);
 
         res.json({
             freights,

@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const { execute, query, queryOne } = require('../config/database');
 const Driver = require('./driver');
 
 const Abastecimento = {
@@ -8,11 +8,11 @@ const Abastecimento = {
      * @param {Object} data - {driver_id, date, quantity, price_per_liter, comprovante_abastecimento}
      * @returns {Object} - Created abastecimento with calculated total_value
      */
-    create(data) {
+    async create(data) {
         const { driver_id, date, quantity, price_per_liter, comprovante_abastecimento } = data;
 
         // Verify driver exists
-        const driver = Driver.findById(driver_id);
+        const driver = await Driver.findById(driver_id);
         if (!driver) {
             throw new Error('Driver not found');
         }
@@ -20,11 +20,10 @@ const Abastecimento = {
         // Calculate total value: quantity * price_per_liter
         const total_value = quantity * price_per_liter;
 
-        const stmt = db.prepare(`
+        const result = await execute(`
             INSERT INTO abastecimentos (driver_id, date, quantity, price_per_liter, total_value, comprovante_abastecimento, status)
             VALUES (?, ?, ?, ?, ?, ?, 'complete')
-        `);
-        const result = stmt.run(driver_id, date, quantity, price_per_liter, total_value, comprovante_abastecimento || null);
+        `, [driver_id, date, quantity, price_per_liter, total_value, comprovante_abastecimento || null]);
         return this.findById(result.lastInsertRowid);
     },
 
@@ -34,20 +33,19 @@ const Abastecimento = {
      * @param {Object} data - {driver_id, date, comprovante_abastecimento}
      * @returns {Object} - Created pending abastecimento
      */
-    createPending(data) {
+    async createPending(data) {
         const { driver_id, date, comprovante_abastecimento } = data;
 
         // Verify driver exists
-        const driver = Driver.findById(driver_id);
+        const driver = await Driver.findById(driver_id);
         if (!driver) {
             throw new Error('Driver not found');
         }
 
-        const stmt = db.prepare(`
+        const result = await execute(`
             INSERT INTO abastecimentos (driver_id, date, quantity, price_per_liter, total_value, comprovante_abastecimento, status)
             VALUES (?, ?, 0, 0, 0, ?, 'pending')
-        `);
-        const result = stmt.run(driver_id, date, comprovante_abastecimento || null);
+        `, [driver_id, date, comprovante_abastecimento || null]);
         return this.findById(result.lastInsertRowid);
     },
 
@@ -57,7 +55,7 @@ const Abastecimento = {
      * @param {Object} data - Fields to update
      * @returns {Object} - Updated abastecimento
      */
-    update(id, data) {
+    async update(id, data) {
         const { quantity, price_per_liter, comprovante_abastecimento, status, client } = data;
         const updates = [];
         const values = [];
@@ -85,7 +83,7 @@ const Abastecimento = {
 
         // Recalculate total_value if quantity or price changed
         if (quantity !== undefined || price_per_liter !== undefined) {
-            const abastecimento = this.findById(id);
+            const abastecimento = await this.findById(id);
             const newQuantity = quantity !== undefined ? quantity : abastecimento.quantity;
             const newPrice = price_per_liter !== undefined ? price_per_liter : abastecimento.price_per_liter;
             const total_value = newQuantity * newPrice;
@@ -96,7 +94,7 @@ const Abastecimento = {
         if (updates.length === 0) return this.findById(id);
 
         values.push(id);
-        db.prepare(`UPDATE abastecimentos SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+        await execute(`UPDATE abastecimentos SET ${updates.join(', ')} WHERE id = ?`, values);
         return this.findById(id);
     },
 
@@ -105,13 +103,13 @@ const Abastecimento = {
      * @param {number} id - Abastecimento ID
      * @returns {Object|null} - Abastecimento or null
      */
-    findById(id) {
-        return db.prepare(`
+    async findById(id) {
+        return queryOne(`
             SELECT a.*, d.name as driver_name, d.plate as driver_plate
             FROM abastecimentos a
             JOIN drivers d ON a.driver_id = d.id
             WHERE a.id = ?
-        `).get(id);
+        `, [id]);
     },
 
     /**
@@ -120,21 +118,21 @@ const Abastecimento = {
      * @param {Object} filters - {date_from, date_to}
      * @returns {Array} - List of abastecimentos
      */
-    findByDriver(driverId, filters = {}) {
-        let query = 'SELECT * FROM abastecimentos WHERE driver_id = ?';
+    async findByDriver(driverId, filters = {}) {
+        let sql = 'SELECT * FROM abastecimentos WHERE driver_id = ?';
         const values = [driverId];
 
         if (filters.date_from) {
-            query += ' AND date >= ?';
+            sql += ' AND date >= ?';
             values.push(filters.date_from);
         }
         if (filters.date_to) {
-            query += ' AND date <= ?';
+            sql += ' AND date <= ?';
             values.push(filters.date_to);
         }
 
-        query += ' ORDER BY date DESC';
-        return db.prepare(query).all(...values);
+        sql += ' ORDER BY date DESC';
+        return query(sql, values);
     },
 
     /**
@@ -142,8 +140,8 @@ const Abastecimento = {
      * @param {Object} filters - {driver_id, date_from, date_to}
      * @returns {Array} - List of abastecimentos with driver info
      */
-    findAll(filters = {}) {
-        let query = `
+    async findAll(filters = {}) {
+        let sql = `
             SELECT a.*, d.name as driver_name, d.plate as driver_plate
             FROM abastecimentos a
             JOIN drivers d ON a.driver_id = d.id
@@ -152,20 +150,20 @@ const Abastecimento = {
         const values = [];
 
         if (filters.driver_id) {
-            query += ' AND a.driver_id = ?';
+            sql += ' AND a.driver_id = ?';
             values.push(filters.driver_id);
         }
         if (filters.date_from) {
-            query += ' AND a.date >= ?';
+            sql += ' AND a.date >= ?';
             values.push(filters.date_from);
         }
         if (filters.date_to) {
-            query += ' AND a.date <= ?';
+            sql += ' AND a.date <= ?';
             values.push(filters.date_to);
         }
 
-        query += ' ORDER BY a.date DESC';
-        return db.prepare(query).all(...values);
+        sql += ' ORDER BY a.date DESC';
+        return query(sql, values);
     },
 
     /**
@@ -173,15 +171,15 @@ const Abastecimento = {
      * @param {number} driverId - Driver ID
      * @returns {Object} - Stats {total_abastecimentos, total_liters, total_value}
      */
-    getDriverStats(driverId) {
-        return db.prepare(`
+    async getDriverStats(driverId) {
+        return queryOne(`
             SELECT 
                 COUNT(*) as total_abastecimentos,
                 COALESCE(SUM(quantity), 0) as total_liters,
                 COALESCE(SUM(total_value), 0) as total_value
             FROM abastecimentos
             WHERE driver_id = ? AND status = 'complete'
-        `).get(driverId);
+        `, [driverId]);
     },
 
     /**
@@ -189,9 +187,8 @@ const Abastecimento = {
      * @param {number} id - Abastecimento ID
      * @returns {boolean} - Success
      */
-    delete(id) {
-        const stmt = db.prepare('DELETE FROM abastecimentos WHERE id = ?');
-        const result = stmt.run(id);
+    async delete(id) {
+        const result = await execute('DELETE FROM abastecimentos WHERE id = ?', [id]);
         return result.changes > 0;
     }
 };

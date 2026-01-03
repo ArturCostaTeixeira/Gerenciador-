@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const { execute, query, queryOne } = require('../config/database');
 const bcrypt = require('bcryptjs');
 
 const Driver = {
@@ -7,17 +7,17 @@ const Driver = {
      * @param {Object} data - {name, plate, client, password, phone, cpf}
      * @returns {Object} - Created driver
      */
-    create(data) {
+    async create(data) {
         const { name, plate, price_per_km_ton, client, password, phone, cpf } = data;
 
         // Hash password if provided
         const hashedPassword = password ? bcrypt.hashSync(password, 10) : null;
 
-        const stmt = db.prepare(`
+        const result = await execute(`
             INSERT INTO drivers (name, plate, price_per_km_ton, client, password, phone, cpf)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        `);
-        const result = stmt.run(name, plate, price_per_km_ton || 0, client || null, hashedPassword, phone || null, cpf || null);
+        `, [name, plate, price_per_km_ton || 0, client || null, hashedPassword, phone || null, cpf || null]);
+
         return this.findById(result.lastInsertRowid);
     },
 
@@ -26,8 +26,8 @@ const Driver = {
      * @param {number} id - Driver ID
      * @returns {Object|null} - Driver or null
      */
-    findById(id) {
-        return db.prepare('SELECT * FROM drivers WHERE id = ?').get(id);
+    async findById(id) {
+        return queryOne('SELECT * FROM drivers WHERE id = ?', [id]);
     },
 
     /**
@@ -36,11 +36,11 @@ const Driver = {
      * @param {string} plate - Driver plate
      * @returns {Object|null} - Driver or null
      */
-    findByNameAndPlate(name, plate) {
-        return db.prepare(`
+    async findByNameAndPlate(name, plate) {
+        return queryOne(`
             SELECT * FROM drivers 
             WHERE LOWER(name) = LOWER(?) AND UPPER(plate) = UPPER(?) AND active = 1
-        `).get(name, plate);
+        `, [name, plate]);
     },
 
     /**
@@ -48,8 +48,8 @@ const Driver = {
      * @param {string} plate - Driver plate
      * @returns {Object|null} - Driver or null
      */
-    findByPlate(plate) {
-        return db.prepare('SELECT * FROM drivers WHERE UPPER(plate) = UPPER(?)').get(plate);
+    async findByPlate(plate) {
+        return queryOne('SELECT * FROM drivers WHERE UPPER(plate) = UPPER(?)', [plate]);
     },
 
     /**
@@ -57,8 +57,8 @@ const Driver = {
      * @param {string} cpf - Driver CPF
      * @returns {Object|null} - Driver or null
      */
-    findByCpf(cpf) {
-        return db.prepare('SELECT * FROM drivers WHERE cpf = ?').get(cpf);
+    async findByCpf(cpf) {
+        return queryOne('SELECT * FROM drivers WHERE cpf = ?', [cpf]);
     },
 
     /**
@@ -66,8 +66,8 @@ const Driver = {
      * @param {string} phone - Driver phone
      * @returns {Object|null} - Driver or null
      */
-    findByPhone(phone) {
-        return db.prepare('SELECT * FROM drivers WHERE phone = ?').get(phone);
+    async findByPhone(phone) {
+        return queryOne('SELECT * FROM drivers WHERE phone = ?', [phone]);
     },
 
     /**
@@ -75,11 +75,11 @@ const Driver = {
      * @param {boolean} activeOnly - Filter active drivers only
      * @returns {Array} - List of drivers
      */
-    findAll(activeOnly = false) {
+    async findAll(activeOnly = false) {
         if (activeOnly) {
-            return db.prepare('SELECT * FROM drivers WHERE active = 1 ORDER BY name').all();
+            return query('SELECT * FROM drivers WHERE active = 1 ORDER BY name');
         }
-        return db.prepare('SELECT * FROM drivers ORDER BY name').all();
+        return query('SELECT * FROM drivers ORDER BY name');
     },
 
     /**
@@ -88,7 +88,7 @@ const Driver = {
      * @param {Object} data - Fields to update
      * @returns {Object|null} - Updated driver or null
      */
-    update(id, data) {
+    async update(id, data) {
         const { name, plate, price_per_km_ton, client, active, phone, cpf } = data;
         const updates = [];
         const values = [];
@@ -125,8 +125,7 @@ const Driver = {
         if (updates.length === 0) return this.findById(id);
 
         values.push(id);
-        const stmt = db.prepare(`UPDATE drivers SET ${updates.join(', ')} WHERE id = ?`);
-        stmt.run(...values);
+        await execute(`UPDATE drivers SET ${updates.join(', ')} WHERE id = ?`, values);
         return this.findById(id);
     },
 
@@ -135,9 +134,8 @@ const Driver = {
      * @param {number} id - Driver ID
      * @returns {boolean} - Success
      */
-    deactivate(id) {
-        const stmt = db.prepare('UPDATE drivers SET active = 0 WHERE id = ?');
-        const result = stmt.run(id);
+    async deactivate(id) {
+        const result = await execute('UPDATE drivers SET active = 0 WHERE id = ?', [id]);
         return result.changes > 0;
     },
 
@@ -147,8 +145,8 @@ const Driver = {
      * @param {string} password - Plain text password
      * @returns {Object|null} - Driver if password matches, null otherwise
      */
-    verifyPassword(plate, password) {
-        const driver = this.findByPlate(plate);
+    async verifyPassword(plate, password) {
+        const driver = await this.findByPlate(plate);
         if (!driver) return null;
 
         // If driver has no password set, deny login

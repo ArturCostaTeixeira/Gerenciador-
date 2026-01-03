@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const { execute, query, queryOne } = require('../config/database');
 
 const Payment = {
     /**
@@ -6,24 +6,24 @@ const Payment = {
      * @param {Object} data - {driver_id, date_range, total_value, comprovante_path, freight_ids}
      * @returns {Object} - Created payment
      */
-    create(data) {
+    async create(data) {
         const { driver_id, date_range, total_value, comprovante_path, freight_ids } = data;
 
-        const stmt = db.prepare(`
+        const result = await execute(`
             INSERT INTO payments (driver_id, date_range, total_value, comprovante_path, freight_ids)
             VALUES (?, ?, ?, ?, ?)
-        `);
-        const result = stmt.run(
+        `, [
             driver_id,
             date_range,
             total_value,
             comprovante_path || null,
             JSON.stringify(freight_ids)
-        );
+        ]);
 
         // Mark all associated freights as paid
-        const markPaid = db.prepare(`UPDATE freights SET paid = 1 WHERE id = ?`);
-        freight_ids.forEach(id => markPaid.run(id));
+        for (const id of freight_ids) {
+            await execute(`UPDATE freights SET paid = 1 WHERE id = ?`, [id]);
+        }
 
         return this.findById(result.lastInsertRowid);
     },
@@ -33,13 +33,13 @@ const Payment = {
      * @param {number} id - Payment ID
      * @returns {Object|null} - Payment or null
      */
-    findById(id) {
-        const payment = db.prepare(`
+    async findById(id) {
+        const payment = await queryOne(`
             SELECT p.*, d.name as driver_name, d.plate as driver_plate
             FROM payments p
             JOIN drivers d ON p.driver_id = d.id
             WHERE p.id = ?
-        `).get(id);
+        `, [id]);
 
         if (payment) {
             payment.freight_ids = JSON.parse(payment.freight_ids);
@@ -52,14 +52,14 @@ const Payment = {
      * @param {number} driverId - Driver ID
      * @returns {Array} - List of payments
      */
-    findByDriver(driverId) {
-        const payments = db.prepare(`
+    async findByDriver(driverId) {
+        const payments = await query(`
             SELECT p.*, d.name as driver_name, d.plate as driver_plate
             FROM payments p
             JOIN drivers d ON p.driver_id = d.id
             WHERE p.driver_id = ?
             ORDER BY p.created_at DESC
-        `).all(driverId);
+        `, [driverId]);
 
         return payments.map(p => ({
             ...p,
@@ -71,13 +71,13 @@ const Payment = {
      * Find all payments
      * @returns {Array} - List of all payments
      */
-    findAll() {
-        const payments = db.prepare(`
+    async findAll() {
+        const payments = await query(`
             SELECT p.*, d.name as driver_name, d.plate as driver_plate
             FROM payments p
             JOIN drivers d ON p.driver_id = d.id
             ORDER BY p.created_at DESC
-        `).all();
+        `);
 
         return payments.map(p => ({
             ...p,
@@ -91,7 +91,7 @@ const Payment = {
      * @param {Object} data - Fields to update
      * @returns {Object} - Updated payment
      */
-    update(id, data) {
+    async update(id, data) {
         const { comprovante_path } = data;
         const updates = [];
         const values = [];
@@ -104,7 +104,7 @@ const Payment = {
         if (updates.length === 0) return this.findById(id);
 
         values.push(id);
-        db.prepare(`UPDATE payments SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+        await execute(`UPDATE payments SET ${updates.join(', ')} WHERE id = ?`, values);
         return this.findById(id);
     },
 
@@ -113,16 +113,16 @@ const Payment = {
      * @param {number} id - Payment ID
      * @returns {boolean} - Success
      */
-    delete(id) {
-        const payment = this.findById(id);
+    async delete(id) {
+        const payment = await this.findById(id);
         if (!payment) return false;
 
         // Unmark freights as paid
-        const unmarkPaid = db.prepare(`UPDATE freights SET paid = 0 WHERE id = ?`);
-        payment.freight_ids.forEach(fId => unmarkPaid.run(fId));
+        for (const fId of payment.freight_ids) {
+            await execute(`UPDATE freights SET paid = 0 WHERE id = ?`, [fId]);
+        }
 
-        const stmt = db.prepare('DELETE FROM payments WHERE id = ?');
-        const result = stmt.run(id);
+        const result = await execute('DELETE FROM payments WHERE id = ?', [id]);
         return result.changes > 0;
     }
 };

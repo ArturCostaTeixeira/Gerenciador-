@@ -1,11 +1,12 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
 
-// Initialize database (creates tables if not exist)
-require('./config/database');
+// Import database utilities
+const { initDatabase, execute } = require('./config/database');
 
 const authRoutes = require('./routes/auth');
 const driverRoutes = require('./routes/drivers');
@@ -13,7 +14,7 @@ const { adminRouter: adminFreightRoutes, driverRouter: driverFreightRoutes } = r
 const { adminRouter: adminAbastecimentoRoutes, driverRouter: driverAbastecimentoRoutes } = require('./routes/abastecimentos');
 const { adminRouter: adminOutrosInsumoRoutes, driverRouter: driverOutrosInsumoRoutes } = require('./routes/outrosinsumos');
 const paymentRoutes = require('./routes/payments');
-const { requireDriver } = require('./middleware/auth');
+const { requireDriver, requireAdmin } = require('./middleware/auth');
 const Driver = require('./models/driver');
 const Freight = require('./models/freight');
 const Abastecimento = require('./models/abastecimento');
@@ -21,7 +22,8 @@ const OutrosInsumo = require('./models/outrosinsumo');
 const ComprovanteDescarga = require('./models/comprovanteDescarga');
 const ComprovanteAbastecimento = require('./models/comprovanteAbastecimento');
 const ComprovanteCarga = require('./models/comprovanteCarga');
-const db = require('./config/database');
+const Payment = require('./models/payment');
+const { query, queryOne } = require('./config/database');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -64,6 +66,11 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Root route - serve landing page (must be before static middleware)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'landing.html'));
+});
+
 // Serve static files for frontend
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -79,9 +86,9 @@ app.use('/api/driver/abastecimentos', driverAbastecimentoRoutes);
 app.use('/api/driver/outrosinsumos', driverOutrosInsumoRoutes);
 
 // Driver profile route
-app.get('/api/driver/profile', requireDriver, (req, res) => {
+app.get('/api/driver/profile', requireDriver, async (req, res) => {
     try {
-        const driver = Driver.findById(req.driver.id);
+        const driver = await Driver.findById(req.driver.id);
         if (!driver) {
             return res.status(404).json({ error: 'Driver not found' });
         }
@@ -95,39 +102,39 @@ app.get('/api/driver/profile', requireDriver, (req, res) => {
 });
 
 // Driver stats route (for dashboard summary cards)
-app.get('/api/driver/stats', requireDriver, (req, res) => {
+app.get('/api/driver/stats', requireDriver, async (req, res) => {
     try {
         const driverId = req.driver.id;
 
-        const freightStats = Freight.getDriverStats(driverId);
-        const abastecimentoStats = Abastecimento.getDriverStats(driverId);
-        const outrosInsumoStats = OutrosInsumo.getDriverStats(driverId);
+        const freightStats = await Freight.getDriverStats(driverId);
+        const abastecimentoStats = await Abastecimento.getDriverStats(driverId);
+        const outrosInsumoStats = await OutrosInsumo.getDriverStats(driverId);
 
         // Get paid (received) total
-        const totalReceived = Freight.getPaidTotalByDriver(driverId);
+        const totalReceived = await Freight.getPaidTotalByDriver(driverId);
 
-        const totalFreights = freightStats.total_value || 0;
-        const totalAbastecimentos = abastecimentoStats.total_value || 0;
-        const totalOutrosInsumos = outrosInsumoStats.total_value || 0;
+        const totalFreights = freightStats?.total_value || 0;
+        const totalAbastecimentos = abastecimentoStats?.total_value || 0;
+        const totalOutrosInsumos = outrosInsumoStats?.total_value || 0;
 
         // New calculation: Total a Receber = Total Fretes - Total Recebido - Abastecimentos - Outros Insumos
         const totalToReceive = totalFreights - totalReceived - totalAbastecimentos - totalOutrosInsumos;
 
         res.json({
             freights: {
-                count: freightStats.total_freights,
-                total_km: freightStats.total_km,
-                total_tons: freightStats.total_tons,
+                count: freightStats?.total_freights || 0,
+                total_km: freightStats?.total_km || 0,
+                total_tons: freightStats?.total_tons || 0,
                 total_value: totalFreights
             },
             abastecimentos: {
-                count: abastecimentoStats.total_abastecimentos,
-                total_liters: abastecimentoStats.total_liters,
+                count: abastecimentoStats?.total_abastecimentos || 0,
+                total_liters: abastecimentoStats?.total_liters || 0,
                 total_value: totalAbastecimentos
             },
             outrosInsumos: {
-                count: outrosInsumoStats.total_outros_insumos,
-                total_quantity: outrosInsumoStats.total_quantity,
+                count: outrosInsumoStats?.total_outros_insumos || 0,
+                total_quantity: outrosInsumoStats?.total_quantity || 0,
                 total_value: totalOutrosInsumos
             },
             total_received: totalReceived,
@@ -140,11 +147,10 @@ app.get('/api/driver/stats', requireDriver, (req, res) => {
 });
 
 // Driver payments endpoint - get payments received by this driver
-const Payment = require('./models/payment');
-app.get('/api/driver/payments', requireDriver, (req, res) => {
+app.get('/api/driver/payments', requireDriver, async (req, res) => {
     try {
         const driverId = req.driver.id;
-        const payments = Payment.findByDriver(driverId);
+        const payments = await Payment.findByDriver(driverId);
         res.json({ payments });
     } catch (error) {
         console.error('Get driver payments error:', error);
@@ -153,12 +159,10 @@ app.get('/api/driver/payments', requireDriver, (req, res) => {
 });
 
 // Driver upload comprovante de carga/descarga
-// Uploading comprovante_carga creates a new pending freight AND adds to pool
-// Uploading comprovante_descarga adds to the pool for admin assignment
 app.post('/api/driver/upload-comprovante', requireDriver, driverUpload.fields([
     { name: 'comprovante_carga', maxCount: 1 },
     { name: 'comprovante_descarga', maxCount: 1 }
-]), (req, res) => {
+]), async (req, res) => {
     try {
         const driverId = req.driver.id;
         let uploadedFiles = {};
@@ -175,14 +179,14 @@ app.post('/api/driver/upload-comprovante', requireDriver, driverUpload.fields([
                 const today = new Date().toISOString().split('T')[0];
 
                 // Create a new pending freight with today's date
-                createdFreight = Freight.createPending({
+                createdFreight = await Freight.createPending({
                     driver_id: driverId,
                     date: today,
                     comprovante_carga: comprovantePath
                 });
 
                 // Also add to pool for potential reassignment
-                createdComprovanteCarga = ComprovanteCarga.create({
+                createdComprovanteCarga = await ComprovanteCarga.create({
                     driver_id: driverId,
                     file_path: comprovantePath,
                     date: today
@@ -190,10 +194,9 @@ app.post('/api/driver/upload-comprovante', requireDriver, driverUpload.fields([
 
                 // Mark as assigned to the pending freight
                 if (createdFreight && createdComprovanteCarga) {
-                    const stmt = db.prepare(`
+                    await execute(`
                         UPDATE comprovantes_carga SET assigned_freight_id = ? WHERE id = ?
-                    `);
-                    stmt.run(createdFreight.id, createdComprovanteCarga.id);
+                    `, [createdFreight.id, createdComprovanteCarga.id]);
                 }
             }
 
@@ -204,7 +207,7 @@ app.post('/api/driver/upload-comprovante', requireDriver, driverUpload.fields([
 
                 // Add to pool with today's date
                 const today = new Date().toISOString().split('T')[0];
-                createdComprovanteDescarga = ComprovanteDescarga.create({
+                createdComprovanteDescarga = await ComprovanteDescarga.create({
                     driver_id: driverId,
                     file_path: comprovantePath,
                     date: today
@@ -226,8 +229,7 @@ app.post('/api/driver/upload-comprovante', requireDriver, driverUpload.fields([
 });
 
 // Driver upload comprovante de abastecimento
-// Creates a pending abastecimento (like pending freight) for admin to complete
-app.post('/api/driver/upload-comprovante-abastecimento', requireDriver, driverUpload.single('comprovante_abastecimento'), (req, res) => {
+app.post('/api/driver/upload-comprovante-abastecimento', requireDriver, driverUpload.single('comprovante_abastecimento'), async (req, res) => {
     try {
         const driverId = req.driver.id;
 
@@ -239,14 +241,14 @@ app.post('/api/driver/upload-comprovante-abastecimento', requireDriver, driverUp
         const today = new Date().toISOString().split('T')[0];
 
         // Create a pending abastecimento with the comprovante
-        const abastecimento = Abastecimento.createPending({
+        const abastecimento = await Abastecimento.createPending({
             driver_id: driverId,
             date: today,
             comprovante_abastecimento: filePath
         });
 
         // Also add to pool for tracking
-        const comprovante = ComprovanteAbastecimento.create({
+        const comprovante = await ComprovanteAbastecimento.create({
             driver_id: driverId,
             file_path: filePath,
             date: today
@@ -254,10 +256,9 @@ app.post('/api/driver/upload-comprovante-abastecimento', requireDriver, driverUp
 
         // Mark as assigned to this abastecimento
         if (abastecimento && comprovante) {
-            const stmt = db.prepare(`
+            await execute(`
                 UPDATE comprovantes_abastecimento SET assigned_abastecimento_id = ? WHERE id = ?
-            `);
-            stmt.run(abastecimento.id, comprovante.id);
+            `, [abastecimento.id, comprovante.id]);
         }
 
         res.json({
@@ -277,17 +278,14 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Admin clients endpoint
-const { requireAdmin } = require('./middleware/auth');
-
 // ============================================
 // Admin Comprovantes Descarga Pool Endpoints
 // ============================================
 
 // Get all unassigned comprovantes descarga
-app.get('/api/admin/comprovantes-descarga', requireAdmin, (req, res) => {
+app.get('/api/admin/comprovantes-descarga', requireAdmin, async (req, res) => {
     try {
-        const comprovantes = ComprovanteDescarga.findUnassigned();
+        const comprovantes = await ComprovanteDescarga.findUnassigned();
         res.json(comprovantes);
     } catch (error) {
         console.error('Get comprovantes error:', error);
@@ -296,7 +294,7 @@ app.get('/api/admin/comprovantes-descarga', requireAdmin, (req, res) => {
 });
 
 // Assign a comprovante to a freight
-app.post('/api/admin/comprovantes-descarga/:id/assign', requireAdmin, (req, res) => {
+app.post('/api/admin/comprovantes-descarga/:id/assign', requireAdmin, async (req, res) => {
     try {
         const comprovanteId = parseInt(req.params.id);
         const { freight_id } = req.body;
@@ -306,10 +304,10 @@ app.post('/api/admin/comprovantes-descarga/:id/assign', requireAdmin, (req, res)
         }
 
         // First unassign any existing comprovante from this freight
-        ComprovanteDescarga.unassignFromFreight(freight_id);
+        await ComprovanteDescarga.unassignFromFreight(freight_id);
 
         // Assign the new comprovante
-        const comprovante = ComprovanteDescarga.assignToFreight(comprovanteId, freight_id);
+        const comprovante = await ComprovanteDescarga.assignToFreight(comprovanteId, freight_id);
 
         if (!comprovante) {
             return res.status(404).json({ error: 'Comprovante not found or already assigned' });
@@ -326,10 +324,10 @@ app.post('/api/admin/comprovantes-descarga/:id/assign', requireAdmin, (req, res)
 });
 
 // Unassign a comprovante from a freight
-app.post('/api/admin/freights/:id/unassign-descarga', requireAdmin, (req, res) => {
+app.post('/api/admin/freights/:id/unassign-descarga', requireAdmin, async (req, res) => {
     try {
         const freightId = parseInt(req.params.id);
-        ComprovanteDescarga.unassignFromFreight(freightId);
+        await ComprovanteDescarga.unassignFromFreight(freightId);
         res.json({ message: 'Comprovante unassigned successfully' });
     } catch (error) {
         console.error('Unassign comprovante error:', error);
@@ -342,9 +340,9 @@ app.post('/api/admin/freights/:id/unassign-descarga', requireAdmin, (req, res) =
 // ============================================
 
 // Get all unassigned comprovantes carga
-app.get('/api/admin/comprovantes-carga', requireAdmin, (req, res) => {
+app.get('/api/admin/comprovantes-carga', requireAdmin, async (req, res) => {
     try {
-        const comprovantes = ComprovanteCarga.findUnassigned();
+        const comprovantes = await ComprovanteCarga.findUnassigned();
         res.json(comprovantes);
     } catch (error) {
         console.error('Get comprovantes carga error:', error);
@@ -353,7 +351,7 @@ app.get('/api/admin/comprovantes-carga', requireAdmin, (req, res) => {
 });
 
 // Assign a comprovante carga to a freight
-app.post('/api/admin/comprovantes-carga/:id/assign', requireAdmin, (req, res) => {
+app.post('/api/admin/comprovantes-carga/:id/assign', requireAdmin, async (req, res) => {
     try {
         const comprovanteId = parseInt(req.params.id);
         const { freight_id } = req.body;
@@ -363,10 +361,10 @@ app.post('/api/admin/comprovantes-carga/:id/assign', requireAdmin, (req, res) =>
         }
 
         // First unassign any existing comprovante carga from this freight
-        ComprovanteCarga.unassignFromFreight(freight_id);
+        await ComprovanteCarga.unassignFromFreight(freight_id);
 
         // Assign the new comprovante
-        const comprovante = ComprovanteCarga.assignToFreight(comprovanteId, freight_id);
+        const comprovante = await ComprovanteCarga.assignToFreight(comprovanteId, freight_id);
 
         if (!comprovante) {
             return res.status(404).json({ error: 'Comprovante not found or already assigned' });
@@ -383,10 +381,10 @@ app.post('/api/admin/comprovantes-carga/:id/assign', requireAdmin, (req, res) =>
 });
 
 // Unassign a comprovante carga from a freight
-app.post('/api/admin/freights/:id/unassign-carga', requireAdmin, (req, res) => {
+app.post('/api/admin/freights/:id/unassign-carga', requireAdmin, async (req, res) => {
     try {
         const freightId = parseInt(req.params.id);
-        ComprovanteCarga.unassignFromFreight(freightId);
+        await ComprovanteCarga.unassignFromFreight(freightId);
         res.json({ message: 'Comprovante carga unassigned successfully' });
     } catch (error) {
         console.error('Unassign comprovante carga error:', error);
@@ -399,9 +397,9 @@ app.post('/api/admin/freights/:id/unassign-carga', requireAdmin, (req, res) => {
 // ============================================
 
 // Get all unassigned comprovantes abastecimento
-app.get('/api/admin/comprovantes-abastecimento', requireAdmin, (req, res) => {
+app.get('/api/admin/comprovantes-abastecimento', requireAdmin, async (req, res) => {
     try {
-        const comprovantes = ComprovanteAbastecimento.findUnassigned();
+        const comprovantes = await ComprovanteAbastecimento.findUnassigned();
         res.json(comprovantes);
     } catch (error) {
         console.error('Get comprovantes abastecimento error:', error);
@@ -410,7 +408,7 @@ app.get('/api/admin/comprovantes-abastecimento', requireAdmin, (req, res) => {
 });
 
 // Assign a comprovante abastecimento to an abastecimento
-app.post('/api/admin/comprovantes-abastecimento/:id/assign', requireAdmin, (req, res) => {
+app.post('/api/admin/comprovantes-abastecimento/:id/assign', requireAdmin, async (req, res) => {
     try {
         const comprovanteId = parseInt(req.params.id);
         const { abastecimento_id } = req.body;
@@ -420,10 +418,10 @@ app.post('/api/admin/comprovantes-abastecimento/:id/assign', requireAdmin, (req,
         }
 
         // First unassign any existing comprovante from this abastecimento
-        ComprovanteAbastecimento.unassignFromAbastecimento(abastecimento_id);
+        await ComprovanteAbastecimento.unassignFromAbastecimento(abastecimento_id);
 
         // Assign the new comprovante
-        const comprovante = ComprovanteAbastecimento.assignToAbastecimento(comprovanteId, abastecimento_id);
+        const comprovante = await ComprovanteAbastecimento.assignToAbastecimento(comprovanteId, abastecimento_id);
 
         if (!comprovante) {
             return res.status(404).json({ error: 'Comprovante not found or already assigned' });
@@ -440,10 +438,10 @@ app.post('/api/admin/comprovantes-abastecimento/:id/assign', requireAdmin, (req,
 });
 
 // Unassign a comprovante from an abastecimento
-app.post('/api/admin/abastecimentos/:id/unassign-comprovante', requireAdmin, (req, res) => {
+app.post('/api/admin/abastecimentos/:id/unassign-comprovante', requireAdmin, async (req, res) => {
     try {
         const abastecimentoId = parseInt(req.params.id);
-        ComprovanteAbastecimento.unassignFromAbastecimento(abastecimentoId);
+        await ComprovanteAbastecimento.unassignFromAbastecimento(abastecimentoId);
         res.json({ message: 'Comprovante unassigned successfully' });
     } catch (error) {
         console.error('Unassign comprovante abastecimento error:', error);
@@ -451,10 +449,11 @@ app.post('/api/admin/abastecimentos/:id/unassign-comprovante', requireAdmin, (re
     }
 });
 
-app.get('/api/admin/clients', requireAdmin, (req, res) => {
+// Admin clients endpoint
+app.get('/api/admin/clients', requireAdmin, async (req, res) => {
     try {
         // Get clients from both clients table and drivers table
-        const clients = db.prepare(`
+        const clients = await query(`
             SELECT 
                 c.name as client,
                 (SELECT COUNT(DISTINCT d.id) FROM drivers d WHERE d.client = c.name) as driver_count,
@@ -479,7 +478,7 @@ app.get('/api/admin/clients', requireAdmin, (req, res) => {
             WHERE d.client IS NOT NULL AND d.client != '' AND d.client NOT IN (SELECT name FROM clients)
             GROUP BY d.client
             ORDER BY 1
-        `).all();
+        `);
 
         res.json(clients);
     } catch (error) {
@@ -489,7 +488,7 @@ app.get('/api/admin/clients', requireAdmin, (req, res) => {
 });
 
 // Create client endpoint
-app.post('/api/admin/clients', requireAdmin, (req, res) => {
+app.post('/api/admin/clients', requireAdmin, async (req, res) => {
     try {
         const { name } = req.body;
 
@@ -500,19 +499,19 @@ app.post('/api/admin/clients', requireAdmin, (req, res) => {
         const trimmedName = name.trim();
 
         // Check if client already exists
-        const existing = db.prepare('SELECT id FROM clients WHERE name = ?').get(trimmedName);
+        const existing = await queryOne('SELECT id FROM clients WHERE name = ?', [trimmedName]);
         if (existing) {
             return res.status(409).json({ error: 'Client already exists' });
         }
 
         // Also check in drivers table
-        const existingInDrivers = db.prepare('SELECT DISTINCT client FROM drivers WHERE client = ?').get(trimmedName);
+        const existingInDrivers = await queryOne('SELECT DISTINCT client FROM drivers WHERE client = ?', [trimmedName]);
         if (existingInDrivers) {
             return res.status(409).json({ error: 'Client already exists (assigned to a driver)' });
         }
 
-        const result = db.prepare('INSERT INTO clients (name) VALUES (?)').run(trimmedName);
-        const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(result.lastInsertRowid);
+        const result = await execute('INSERT INTO clients (name) VALUES (?)', [trimmedName]);
+        const client = await queryOne('SELECT * FROM clients WHERE id = ?', [result.lastInsertRowid]);
 
         res.status(201).json(client);
     } catch (error) {
@@ -522,52 +521,53 @@ app.post('/api/admin/clients', requireAdmin, (req, res) => {
 });
 
 // Client details endpoint
-app.get('/api/admin/clients/:clientName', requireAdmin, (req, res) => {
+app.get('/api/admin/clients/:clientName', requireAdmin, async (req, res) => {
     try {
         const clientName = decodeURIComponent(req.params.clientName);
 
         // Get drivers for this client
-        const drivers = db.prepare(`
+        const drivers = await query(`
             SELECT * FROM drivers WHERE client = ? ORDER BY name
-        `).all(clientName);
+        `, [clientName]);
 
         if (drivers.length === 0) {
             return res.status(404).json({ error: 'Client not found' });
         }
 
         const driverIds = drivers.map(d => d.id);
+        const driverIdList = driverIds.join(',');
 
         // Get freights for these drivers
-        const freights = db.prepare(`
+        const freights = await query(`
             SELECT f.*, d.name as driver_name, d.plate as driver_plate
             FROM freights f
             JOIN drivers d ON f.driver_id = d.id
-            WHERE f.driver_id IN (${driverIds.join(',')})
+            WHERE f.driver_id IN (${driverIdList})
             ORDER BY f.date DESC
-        `).all();
+        `);
 
         // Get abastecimentos for these drivers
-        const abastecimentos = db.prepare(`
+        const abastecimentos = await query(`
             SELECT a.*, d.name as driver_name, d.plate as driver_plate
             FROM abastecimentos a
             JOIN drivers d ON a.driver_id = d.id
-            WHERE a.driver_id IN (${driverIds.join(',')})
+            WHERE a.driver_id IN (${driverIdList})
             ORDER BY a.date DESC
-        `).all();
+        `);
 
         // Get outros insumos for these drivers
-        const outrosInsumos = db.prepare(`
+        const outrosInsumos = await query(`
             SELECT oi.*, d.name as driver_name, d.plate as driver_plate
             FROM outros_insumos oi
             JOIN drivers d ON oi.driver_id = d.id
-            WHERE oi.driver_id IN (${driverIds.join(',')})
+            WHERE oi.driver_id IN (${driverIdList})
             ORDER BY oi.date DESC
-        `).all();
+        `);
 
         // Calculate totals
-        const totalFreightValue = freights.reduce((sum, f) => sum + f.total_value, 0);
-        const totalAbastecimentoValue = abastecimentos.reduce((sum, a) => sum + a.total_value, 0);
-        const totalOutrosInsumosValue = outrosInsumos.reduce((sum, oi) => sum + oi.total_value, 0);
+        const totalFreightValue = freights.reduce((sum, f) => sum + (f.total_value || 0), 0);
+        const totalAbastecimentoValue = abastecimentos.reduce((sum, a) => sum + (a.total_value || 0), 0);
+        const totalOutrosInsumosValue = outrosInsumos.reduce((sum, oi) => sum + (oi.total_value || 0), 0);
 
         res.json({
             client: clientName,
@@ -592,13 +592,27 @@ app.get('/api/admin/clients/:clientName', requireAdmin, (req, res) => {
     }
 });
 
-// SPA fallback - serve appropriate index based on path
+// Landing page route
+app.get('/landing', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'landing.html'));
+});
+
+// Driver portal route
+app.get('/portal', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// SPA fallback - serve appropriate page based on path
 app.get('*', (req, res) => {
     if (req.path.startsWith('/api')) {
         res.status(404).json({ error: 'Endpoint not found' });
     } else if (req.path.startsWith('/admin')) {
         res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    } else if (req.path === '/' || req.path === '') {
+        // Root serves landing page
+        res.sendFile(path.join(__dirname, 'public', 'landing.html'));
     } else {
+        // Default: try to serve static file, or fallback to driver portal
         res.sendFile(path.join(__dirname, 'public', 'index.html'));
     }
 });
@@ -609,9 +623,15 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`
+// Initialize database and start server
+async function startServer() {
+    try {
+        console.log('Initializing Turso database...');
+        await initDatabase();
+        console.log('Database initialized successfully');
+
+        app.listen(PORT, () => {
+            console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║     Carrier Management System - Backend API                ║
 ╠════════════════════════════════════════════════════════════╣
@@ -620,8 +640,16 @@ app.listen(PORT, () => {
 ║  Frontend: http://localhost:${PORT}                           ║
 ║                                                            ║
 ║  Default admin: admin / admin123                           ║
+║  Database: Turso (libSQL)                                  ║
 ╚════════════════════════════════════════════════════════════╝
-    `);
-});
+            `);
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
 
 module.exports = app;

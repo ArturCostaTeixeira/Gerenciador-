@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const { execute, query, queryOne } = require('../config/database');
 
 const ComprovanteDescarga = {
     /**
@@ -6,13 +6,12 @@ const ComprovanteDescarga = {
      * @param {Object} data - {driver_id, file_path, date}
      * @returns {Object} - Created comprovante
      */
-    create(data) {
+    async create(data) {
         const { driver_id, file_path, date } = data;
-        const stmt = db.prepare(`
+        const result = await execute(`
             INSERT INTO comprovantes_descarga (driver_id, file_path, date)
             VALUES (?, ?, ?)
-        `);
-        const result = stmt.run(driver_id, file_path, date);
+        `, [driver_id, file_path, date]);
         return this.findById(result.lastInsertRowid);
     },
 
@@ -21,13 +20,13 @@ const ComprovanteDescarga = {
      * @param {number} id - Comprovante ID
      * @returns {Object|null} - Comprovante or null
      */
-    findById(id) {
-        return db.prepare(`
+    async findById(id) {
+        return queryOne(`
             SELECT cd.*, d.name as driver_name
             FROM comprovantes_descarga cd
             JOIN drivers d ON cd.driver_id = d.id
             WHERE cd.id = ?
-        `).get(id);
+        `, [id]);
     },
 
     /**
@@ -35,14 +34,14 @@ const ComprovanteDescarga = {
      * Returns comprovantes formatted with display name (Driver - Date - N)
      * @returns {Array} - List of unassigned comprovantes with formatted names
      */
-    findUnassigned() {
-        const comprovantes = db.prepare(`
+    async findUnassigned() {
+        const comprovantes = await query(`
             SELECT cd.*, d.name as driver_name
             FROM comprovantes_descarga cd
             JOIN drivers d ON cd.driver_id = d.id
             WHERE cd.assigned_freight_id IS NULL
             ORDER BY cd.date DESC, cd.id DESC
-        `).all();
+        `);
 
         // Group by driver and date to handle numbering
         const grouped = {};
@@ -79,21 +78,20 @@ const ComprovanteDescarga = {
      * @param {number} freightId - Freight ID
      * @returns {Object|null} - Updated comprovante
      */
-    assignToFreight(comprovanteId, freightId) {
-        const stmt = db.prepare(`
+    async assignToFreight(comprovanteId, freightId) {
+        const result = await execute(`
             UPDATE comprovantes_descarga 
             SET assigned_freight_id = ?
             WHERE id = ? AND assigned_freight_id IS NULL
-        `);
-        const result = stmt.run(freightId, comprovanteId);
+        `, [freightId, comprovanteId]);
 
         if (result.changes > 0) {
             // Also update the freight's comprovante_descarga field
-            const comprovante = this.findById(comprovanteId);
+            const comprovante = await this.findById(comprovanteId);
             if (comprovante) {
-                db.prepare(`
+                await execute(`
                     UPDATE freights SET comprovante_descarga = ? WHERE id = ?
-                `).run(comprovante.file_path, freightId);
+                `, [comprovante.file_path, freightId]);
             }
             return comprovante;
         }
@@ -105,18 +103,17 @@ const ComprovanteDescarga = {
      * @param {number} freightId - Freight ID
      * @returns {boolean} - Success
      */
-    unassignFromFreight(freightId) {
-        const stmt = db.prepare(`
+    async unassignFromFreight(freightId) {
+        const result = await execute(`
             UPDATE comprovantes_descarga 
             SET assigned_freight_id = NULL
             WHERE assigned_freight_id = ?
-        `);
-        const result = stmt.run(freightId);
+        `, [freightId]);
 
         // Also clear the freight's comprovante_descarga field
-        db.prepare(`
+        await execute(`
             UPDATE freights SET comprovante_descarga = NULL WHERE id = ?
-        `).run(freightId);
+        `, [freightId]);
 
         return result.changes > 0;
     },
@@ -126,13 +123,13 @@ const ComprovanteDescarga = {
      * @param {number} freightId - Freight ID
      * @returns {Object|null} - Comprovante or null
      */
-    findByFreight(freightId) {
-        return db.prepare(`
+    async findByFreight(freightId) {
+        return queryOne(`
             SELECT cd.*, d.name as driver_name
             FROM comprovantes_descarga cd
             JOIN drivers d ON cd.driver_id = d.id
             WHERE cd.assigned_freight_id = ?
-        `).get(freightId);
+        `, [freightId]);
     }
 };
 

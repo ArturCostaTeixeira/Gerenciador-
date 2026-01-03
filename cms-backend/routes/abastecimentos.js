@@ -54,7 +54,7 @@ adminRouter.use(requireAdmin);
  * POST /api/admin/abastecimentos
  * Create abastecimento for a driver (admin only)
  */
-adminRouter.post('/', upload.single('comprovante_abastecimento'), (req, res) => {
+adminRouter.post('/', upload.single('comprovante_abastecimento'), async (req, res) => {
     try {
         const { driver_id, date, quantity, price_per_liter } = req.body;
 
@@ -80,7 +80,7 @@ adminRouter.post('/', upload.single('comprovante_abastecimento'), (req, res) => 
         }
 
         // Verify driver exists
-        const driver = Driver.findById(driver_id);
+        const driver = await Driver.findById(driver_id);
         if (!driver) {
             return res.status(404).json({ error: 'Driver not found' });
         }
@@ -91,7 +91,7 @@ adminRouter.post('/', upload.single('comprovante_abastecimento'), (req, res) => 
             comprovante_abastecimento = '/uploads/comprovantes/' + req.file.filename;
         }
 
-        const abastecimento = Abastecimento.create({
+        const abastecimento = await Abastecimento.create({
             driver_id: parseInt(driver_id),
             date,
             quantity: parseFloat(quantity),
@@ -109,7 +109,7 @@ adminRouter.post('/', upload.single('comprovante_abastecimento'), (req, res) => 
  * GET /api/admin/abastecimentos
  * List all abastecimentos with optional filters
  */
-adminRouter.get('/', (req, res) => {
+adminRouter.get('/', async (req, res) => {
     try {
         const filters = {
             driver_id: req.query.driver_id,
@@ -117,7 +117,7 @@ adminRouter.get('/', (req, res) => {
             date_to: req.query.date_to
         };
 
-        const abastecimentos = Abastecimento.findAll(filters);
+        const abastecimentos = await Abastecimento.findAll(filters);
         res.json(abastecimentos);
     } catch (error) {
         console.error('List abastecimentos error:', error);
@@ -129,9 +129,9 @@ adminRouter.get('/', (req, res) => {
  * GET /api/admin/abastecimentos/:id
  * Get abastecimento by ID
  */
-adminRouter.get('/:id', (req, res) => {
+adminRouter.get('/:id', async (req, res) => {
     try {
-        const abastecimento = Abastecimento.findById(req.params.id);
+        const abastecimento = await Abastecimento.findById(req.params.id);
         if (!abastecimento) {
             return res.status(404).json({ error: 'Abastecimento not found' });
         }
@@ -146,14 +146,14 @@ adminRouter.get('/:id', (req, res) => {
  * DELETE /api/admin/abastecimentos/:id
  * Delete abastecimento
  */
-adminRouter.delete('/:id', (req, res) => {
+adminRouter.delete('/:id', async (req, res) => {
     try {
-        const abastecimento = Abastecimento.findById(req.params.id);
+        const abastecimento = await Abastecimento.findById(req.params.id);
         if (!abastecimento) {
             return res.status(404).json({ error: 'Abastecimento not found' });
         }
 
-        Abastecimento.delete(req.params.id);
+        await Abastecimento.delete(req.params.id);
         res.json({ message: 'Abastecimento deleted successfully' });
     } catch (error) {
         console.error('Delete abastecimento error:', error);
@@ -165,10 +165,10 @@ adminRouter.delete('/:id', (req, res) => {
  * PUT /api/admin/abastecimentos/:id
  * Update abastecimento (for completing pending abastecimentos)
  */
-adminRouter.put('/:id', upload.single('comprovante_abastecimento'), (req, res) => {
+adminRouter.put('/:id', upload.single('comprovante_abastecimento'), async (req, res) => {
     try {
         const abastecimentoId = parseInt(req.params.id);
-        const abastecimento = Abastecimento.findById(abastecimentoId);
+        const abastecimento = await Abastecimento.findById(abastecimentoId);
 
         if (!abastecimento) {
             return res.status(404).json({ error: 'Abastecimento not found' });
@@ -191,7 +191,7 @@ adminRouter.put('/:id', upload.single('comprovante_abastecimento'), (req, res) =
             updateData.status = 'complete';
         }
 
-        const updated = Abastecimento.update(abastecimentoId, updateData);
+        const updated = await Abastecimento.update(abastecimentoId, updateData);
         res.json(updated);
     } catch (error) {
         console.error('Update abastecimento error:', error);
@@ -209,7 +209,7 @@ driverRouter.use(requireDriver);
  * GET /api/driver/abastecimentos
  * Get logged-in driver's abastecimentos
  */
-driverRouter.get('/', (req, res) => {
+driverRouter.get('/', async (req, res) => {
     try {
         const driverId = req.driver.id;
         const filters = {
@@ -217,8 +217,8 @@ driverRouter.get('/', (req, res) => {
             date_to: req.query.date_to
         };
 
-        const abastecimentos = Abastecimento.findByDriver(driverId, filters);
-        const stats = Abastecimento.getDriverStats(driverId);
+        const abastecimentos = await Abastecimento.findByDriver(driverId, filters);
+        const stats = await Abastecimento.getDriverStats(driverId);
 
         res.json({
             abastecimentos,

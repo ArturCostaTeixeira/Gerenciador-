@@ -50,7 +50,7 @@ router.use(requireAdmin);
  * POST /api/admin/payments
  * Create a new payment (with optional comprovante)
  */
-router.post('/', upload.single('comprovante'), (req, res) => {
+router.post('/', upload.single('comprovante'), async (req, res) => {
     try {
         const { driver_id, date_range, total_value, freight_ids } = req.body;
 
@@ -72,7 +72,7 @@ router.post('/', upload.single('comprovante'), (req, res) => {
             comprovante_path = '/uploads/payments/' + req.file.filename;
         }
 
-        const payment = Payment.create({
+        const payment = await Payment.create({
             driver_id: parseInt(driver_id),
             date_range,
             total_value: parseFloat(total_value),
@@ -91,15 +91,15 @@ router.post('/', upload.single('comprovante'), (req, res) => {
  * GET /api/admin/payments
  * List all payments or filter by driver
  */
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const { driver_id } = req.query;
 
         let payments;
         if (driver_id) {
-            payments = Payment.findByDriver(parseInt(driver_id));
+            payments = await Payment.findByDriver(parseInt(driver_id));
         } else {
-            payments = Payment.findAll();
+            payments = await Payment.findAll();
         }
 
         res.json(payments);
@@ -113,9 +113,9 @@ router.get('/', (req, res) => {
  * GET /api/admin/payments/:id
  * Get payment by ID
  */
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
     try {
-        const payment = Payment.findById(parseInt(req.params.id));
+        const payment = await Payment.findById(parseInt(req.params.id));
         if (!payment) {
             return res.status(404).json({ error: 'Payment not found' });
         }
@@ -130,10 +130,10 @@ router.get('/:id', (req, res) => {
  * PUT /api/admin/payments/:id
  * Update payment (e.g., add comprovante)
  */
-router.put('/:id', upload.single('comprovante'), (req, res) => {
+router.put('/:id', upload.single('comprovante'), async (req, res) => {
     try {
         const paymentId = parseInt(req.params.id);
-        const payment = Payment.findById(paymentId);
+        const payment = await Payment.findById(paymentId);
 
         if (!payment) {
             return res.status(404).json({ error: 'Payment not found' });
@@ -145,7 +145,7 @@ router.put('/:id', upload.single('comprovante'), (req, res) => {
             updateData.comprovante_path = '/uploads/payments/' + req.file.filename;
         }
 
-        const updated = Payment.update(paymentId, updateData);
+        const updated = await Payment.update(paymentId, updateData);
         res.json(updated);
     } catch (error) {
         console.error('Update payment error:', error);
@@ -157,9 +157,9 @@ router.put('/:id', upload.single('comprovante'), (req, res) => {
  * DELETE /api/admin/payments/:id
  * Delete payment
  */
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
-        const success = Payment.delete(parseInt(req.params.id));
+        const success = await Payment.delete(parseInt(req.params.id));
         if (!success) {
             return res.status(404).json({ error: 'Payment not found' });
         }

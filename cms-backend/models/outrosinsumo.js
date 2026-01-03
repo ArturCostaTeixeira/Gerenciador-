@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const { execute, query, queryOne } = require('../config/database');
 const Driver = require('./driver');
 
 const OutrosInsumo = {
@@ -8,11 +8,11 @@ const OutrosInsumo = {
      * @param {Object} data - {driver_id, date, quantity, description, unit_price}
      * @returns {Object} - Created outros insumo with calculated total_value
      */
-    create(data) {
+    async create(data) {
         const { driver_id, date, quantity, description, unit_price } = data;
 
         // Verify driver exists
-        const driver = Driver.findById(driver_id);
+        const driver = await Driver.findById(driver_id);
         if (!driver) {
             throw new Error('Driver not found');
         }
@@ -20,11 +20,10 @@ const OutrosInsumo = {
         // Calculate total value: quantity * unit_price
         const total_value = quantity * unit_price;
 
-        const stmt = db.prepare(`
+        const result = await execute(`
             INSERT INTO outros_insumos (driver_id, date, quantity, description, unit_price, total_value)
             VALUES (?, ?, ?, ?, ?, ?)
-        `);
-        const result = stmt.run(driver_id, date, quantity, description, unit_price, total_value);
+        `, [driver_id, date, quantity, description, unit_price, total_value]);
         return this.findById(result.lastInsertRowid);
     },
 
@@ -33,13 +32,13 @@ const OutrosInsumo = {
      * @param {number} id - Outros insumo ID
      * @returns {Object|null} - Outros insumo or null
      */
-    findById(id) {
-        return db.prepare(`
+    async findById(id) {
+        return queryOne(`
             SELECT oi.*, d.name as driver_name, d.plate as driver_plate, d.client as client
             FROM outros_insumos oi
             JOIN drivers d ON oi.driver_id = d.id
             WHERE oi.id = ?
-        `).get(id);
+        `, [id]);
     },
 
     /**
@@ -48,21 +47,21 @@ const OutrosInsumo = {
      * @param {Object} filters - {date_from, date_to}
      * @returns {Array} - List of outros insumos
      */
-    findByDriver(driverId, filters = {}) {
-        let query = 'SELECT * FROM outros_insumos WHERE driver_id = ?';
+    async findByDriver(driverId, filters = {}) {
+        let sql = 'SELECT * FROM outros_insumos WHERE driver_id = ?';
         const values = [driverId];
 
         if (filters.date_from) {
-            query += ' AND date >= ?';
+            sql += ' AND date >= ?';
             values.push(filters.date_from);
         }
         if (filters.date_to) {
-            query += ' AND date <= ?';
+            sql += ' AND date <= ?';
             values.push(filters.date_to);
         }
 
-        query += ' ORDER BY date DESC';
-        return db.prepare(query).all(...values);
+        sql += ' ORDER BY date DESC';
+        return query(sql, values);
     },
 
     /**
@@ -70,8 +69,8 @@ const OutrosInsumo = {
      * @param {Object} filters - {driver_id, client, date_from, date_to}
      * @returns {Array} - List of outros insumos with driver info
      */
-    findAll(filters = {}) {
-        let query = `
+    async findAll(filters = {}) {
+        let sql = `
             SELECT oi.*, d.name as driver_name, d.plate as driver_plate, d.client as client
             FROM outros_insumos oi
             JOIN drivers d ON oi.driver_id = d.id
@@ -80,24 +79,24 @@ const OutrosInsumo = {
         const values = [];
 
         if (filters.driver_id) {
-            query += ' AND oi.driver_id = ?';
+            sql += ' AND oi.driver_id = ?';
             values.push(filters.driver_id);
         }
         if (filters.client) {
-            query += ' AND d.client = ?';
+            sql += ' AND d.client = ?';
             values.push(filters.client);
         }
         if (filters.date_from) {
-            query += ' AND oi.date >= ?';
+            sql += ' AND oi.date >= ?';
             values.push(filters.date_from);
         }
         if (filters.date_to) {
-            query += ' AND oi.date <= ?';
+            sql += ' AND oi.date <= ?';
             values.push(filters.date_to);
         }
 
-        query += ' ORDER BY oi.date DESC';
-        return db.prepare(query).all(...values);
+        sql += ' ORDER BY oi.date DESC';
+        return query(sql, values);
     },
 
     /**
@@ -105,15 +104,15 @@ const OutrosInsumo = {
      * @param {number} driverId - Driver ID
      * @returns {Object} - Stats {total_outros_insumos, total_quantity, total_value}
      */
-    getDriverStats(driverId) {
-        return db.prepare(`
+    async getDriverStats(driverId) {
+        return queryOne(`
             SELECT 
                 COUNT(*) as total_outros_insumos,
                 COALESCE(SUM(quantity), 0) as total_quantity,
                 COALESCE(SUM(total_value), 0) as total_value
             FROM outros_insumos
             WHERE driver_id = ?
-        `).get(driverId);
+        `, [driverId]);
     },
 
     /**
@@ -121,9 +120,8 @@ const OutrosInsumo = {
      * @param {number} id - Outros insumo ID
      * @returns {boolean} - Success
      */
-    delete(id) {
-        const stmt = db.prepare('DELETE FROM outros_insumos WHERE id = ?');
-        const result = stmt.run(id);
+    async delete(id) {
+        const result = await execute('DELETE FROM outros_insumos WHERE id = ?', [id]);
         return result.changes > 0;
     }
 };

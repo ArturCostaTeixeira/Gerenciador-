@@ -10,7 +10,7 @@ const { generateToken, verifyToken } = require('../middleware/auth');
  * Driver sign-up (one-time registration)
  * Creates driver with name, plate, password, phone, and CPF
  */
-router.post('/driver/signup', (req, res) => {
+router.post('/driver/signup', async (req, res) => {
     try {
         const { name, plate, password, phone, cpf } = req.body;
 
@@ -46,25 +46,25 @@ router.post('/driver/signup', (req, res) => {
         const normalizedPlate = normalizePlate(plate);
 
         // Check if plate already exists
-        const existingPlate = Driver.findByPlate(normalizedPlate);
+        const existingPlate = await Driver.findByPlate(normalizedPlate);
         if (existingPlate) {
             return res.status(409).json({ error: 'Placa já cadastrada no sistema' });
         }
 
         // Check if CPF already exists
-        const existingCpf = Driver.findByCpf(cpfClean);
+        const existingCpf = await Driver.findByCpf(cpfClean);
         if (existingCpf) {
             return res.status(409).json({ error: 'CPF já cadastrado no sistema' });
         }
 
         // Check if Phone already exists
-        const existingPhone = Driver.findByPhone(phoneClean);
+        const existingPhone = await Driver.findByPhone(phoneClean);
         if (existingPhone) {
             return res.status(409).json({ error: 'Telefone já cadastrado no sistema' });
         }
 
         // Create driver with password, phone, and CPF
-        const driver = Driver.create({
+        const driver = await Driver.create({
             name: name.trim(),
             plate: normalizedPlate,
             price_per_km_ton: 0, // Default, admin will update
@@ -101,7 +101,7 @@ router.post('/driver/signup', (req, res) => {
  * Driver login with plate and password
  * Returns JWT token
  */
-router.post('/driver/login', (req, res) => {
+router.post('/driver/login', async (req, res) => {
     try {
         const { plate, password } = req.body;
 
@@ -117,7 +117,7 @@ router.post('/driver/login', (req, res) => {
         const normalizedPlate = normalizePlate(plate);
 
         // Verify password
-        const driver = Driver.verifyPassword(normalizedPlate, password);
+        const driver = await Driver.verifyPassword(normalizedPlate, password);
 
         if (!driver) {
             return res.status(401).json({ error: 'Invalid plate or password' });
@@ -154,7 +154,7 @@ router.post('/driver/login', (req, res) => {
  * Admin login with username and password
  * Returns JWT token
  */
-router.post('/admin/login', (req, res) => {
+router.post('/admin/login', async (req, res) => {
     try {
         const { username, password } = req.body;
 
@@ -163,7 +163,7 @@ router.post('/admin/login', (req, res) => {
             return res.status(400).json({ error: 'Username and password are required' });
         }
 
-        const admin = Admin.verifyCredentials(username, password);
+        const admin = await Admin.verifyCredentials(username, password);
 
         if (!admin) {
             return res.status(401).json({ error: 'Invalid credentials' });

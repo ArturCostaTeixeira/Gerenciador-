@@ -11,7 +11,7 @@ router.use(requireAdmin);
  * POST /api/admin/drivers
  * Create a new driver
  */
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const { name, plate, price_per_km_ton, client } = req.body;
 
@@ -36,12 +36,12 @@ router.post('/', (req, res) => {
 
         // Check if plate already exists
         const normalizedPlate = normalizePlate(plate);
-        const existing = Driver.findByPlate(normalizedPlate);
+        const existing = await Driver.findByPlate(normalizedPlate);
         if (existing) {
             return res.status(409).json({ error: 'Plate already registered' });
         }
 
-        const driver = Driver.create({
+        const driver = await Driver.create({
             name: name.trim(),
             plate: normalizedPlate,
             price_per_km_ton,
@@ -59,10 +59,10 @@ router.post('/', (req, res) => {
  * GET /api/admin/drivers
  * List all drivers
  */
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const activeOnly = req.query.active === 'true';
-        const drivers = Driver.findAll(activeOnly);
+        const drivers = await Driver.findAll(activeOnly);
         res.json(drivers);
     } catch (error) {
         console.error('List drivers error:', error);
@@ -74,9 +74,9 @@ router.get('/', (req, res) => {
  * GET /api/admin/drivers/:id
  * Get driver by ID
  */
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
     try {
-        const driver = Driver.findById(req.params.id);
+        const driver = await Driver.findById(req.params.id);
         if (!driver) {
             return res.status(404).json({ error: 'Driver not found' });
         }
@@ -91,9 +91,9 @@ router.get('/:id', (req, res) => {
  * PUT /api/admin/drivers/:id
  * Update driver
  */
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
     try {
-        const driver = Driver.findById(req.params.id);
+        const driver = await Driver.findById(req.params.id);
         if (!driver) {
             return res.status(404).json({ error: 'Driver not found' });
         }
@@ -113,7 +113,7 @@ router.put('/:id', (req, res) => {
             }
             const normalizedPlate = normalizePlate(plate);
             // Check if plate belongs to another driver
-            const existing = Driver.findByPlate(normalizedPlate);
+            const existing = await Driver.findByPlate(normalizedPlate);
             if (existing && existing.id !== parseInt(req.params.id)) {
                 return res.status(409).json({ error: 'Plate already registered to another driver' });
             }
@@ -137,7 +137,7 @@ router.put('/:id', (req, res) => {
             updates.active = active;
         }
 
-        const updated = Driver.update(req.params.id, updates);
+        const updated = await Driver.update(req.params.id, updates);
         res.json(updated);
     } catch (error) {
         console.error('Update driver error:', error);
@@ -149,14 +149,14 @@ router.put('/:id', (req, res) => {
  * DELETE /api/admin/drivers/:id
  * Deactivate driver (soft delete)
  */
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
-        const driver = Driver.findById(req.params.id);
+        const driver = await Driver.findById(req.params.id);
         if (!driver) {
             return res.status(404).json({ error: 'Driver not found' });
         }
 
-        Driver.deactivate(req.params.id);
+        await Driver.deactivate(req.params.id);
         res.json({ message: 'Driver deactivated successfully' });
     } catch (error) {
         console.error('Delete driver error:', error);

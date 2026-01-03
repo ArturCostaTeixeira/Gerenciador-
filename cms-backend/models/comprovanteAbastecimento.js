@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const { execute, query, queryOne } = require('../config/database');
 
 const ComprovanteAbastecimento = {
     /**
@@ -6,13 +6,12 @@ const ComprovanteAbastecimento = {
      * @param {Object} data - {driver_id, file_path, date}
      * @returns {Object} - Created comprovante
      */
-    create(data) {
+    async create(data) {
         const { driver_id, file_path, date } = data;
-        const stmt = db.prepare(`
+        const result = await execute(`
             INSERT INTO comprovantes_abastecimento (driver_id, file_path, date)
             VALUES (?, ?, ?)
-        `);
-        const result = stmt.run(driver_id, file_path, date);
+        `, [driver_id, file_path, date]);
         return this.findById(result.lastInsertRowid);
     },
 
@@ -21,13 +20,13 @@ const ComprovanteAbastecimento = {
      * @param {number} id - Comprovante ID
      * @returns {Object|null} - Comprovante or null
      */
-    findById(id) {
-        return db.prepare(`
+    async findById(id) {
+        return queryOne(`
             SELECT ca.*, d.name as driver_name
             FROM comprovantes_abastecimento ca
             JOIN drivers d ON ca.driver_id = d.id
             WHERE ca.id = ?
-        `).get(id);
+        `, [id]);
     },
 
     /**
@@ -35,14 +34,14 @@ const ComprovanteAbastecimento = {
      * Returns comprovantes formatted with display name (Driver - Date - N)
      * @returns {Array} - List of unassigned comprovantes with formatted names
      */
-    findUnassigned() {
-        const comprovantes = db.prepare(`
+    async findUnassigned() {
+        const comprovantes = await query(`
             SELECT ca.*, d.name as driver_name
             FROM comprovantes_abastecimento ca
             JOIN drivers d ON ca.driver_id = d.id
             WHERE ca.assigned_abastecimento_id IS NULL
             ORDER BY ca.date DESC, ca.id DESC
-        `).all();
+        `);
 
         // Group by driver and date to handle numbering
         const grouped = {};
@@ -79,21 +78,20 @@ const ComprovanteAbastecimento = {
      * @param {number} abastecimentoId - Abastecimento ID
      * @returns {Object|null} - Updated comprovante
      */
-    assignToAbastecimento(comprovanteId, abastecimentoId) {
-        const stmt = db.prepare(`
+    async assignToAbastecimento(comprovanteId, abastecimentoId) {
+        const result = await execute(`
             UPDATE comprovantes_abastecimento 
             SET assigned_abastecimento_id = ?
             WHERE id = ? AND assigned_abastecimento_id IS NULL
-        `);
-        const result = stmt.run(abastecimentoId, comprovanteId);
+        `, [abastecimentoId, comprovanteId]);
 
         if (result.changes > 0) {
             // Also update the abastecimento's comprovante_abastecimento field
-            const comprovante = this.findById(comprovanteId);
+            const comprovante = await this.findById(comprovanteId);
             if (comprovante) {
-                db.prepare(`
+                await execute(`
                     UPDATE abastecimentos SET comprovante_abastecimento = ? WHERE id = ?
-                `).run(comprovante.file_path, abastecimentoId);
+                `, [comprovante.file_path, abastecimentoId]);
             }
             return comprovante;
         }
@@ -105,18 +103,17 @@ const ComprovanteAbastecimento = {
      * @param {number} abastecimentoId - Abastecimento ID
      * @returns {boolean} - Success
      */
-    unassignFromAbastecimento(abastecimentoId) {
-        const stmt = db.prepare(`
+    async unassignFromAbastecimento(abastecimentoId) {
+        const result = await execute(`
             UPDATE comprovantes_abastecimento 
             SET assigned_abastecimento_id = NULL
             WHERE assigned_abastecimento_id = ?
-        `);
-        const result = stmt.run(abastecimentoId);
+        `, [abastecimentoId]);
 
         // Also clear the abastecimento's comprovante_abastecimento field
-        db.prepare(`
+        await execute(`
             UPDATE abastecimentos SET comprovante_abastecimento = NULL WHERE id = ?
-        `).run(abastecimentoId);
+        `, [abastecimentoId]);
 
         return result.changes > 0;
     },
@@ -126,13 +123,13 @@ const ComprovanteAbastecimento = {
      * @param {number} abastecimentoId - Abastecimento ID
      * @returns {Object|null} - Comprovante or null
      */
-    findByAbastecimento(abastecimentoId) {
-        return db.prepare(`
+    async findByAbastecimento(abastecimentoId) {
+        return queryOne(`
             SELECT ca.*, d.name as driver_name
             FROM comprovantes_abastecimento ca
             JOIN drivers d ON ca.driver_id = d.id
             WHERE ca.assigned_abastecimento_id = ?
-        `).get(abastecimentoId);
+        `, [abastecimentoId]);
     }
 };
 
