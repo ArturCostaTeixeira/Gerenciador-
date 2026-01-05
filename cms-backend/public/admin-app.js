@@ -166,6 +166,8 @@ function startPolling() {
     pollingInterval = setInterval(async () => {
         try {
             await Promise.all([
+                loadDrivers(),
+                loadAbastecedores(),
                 loadFreights(),
                 loadAbastecimentos(),
                 loadUnassignedComprovantes(),
@@ -173,7 +175,6 @@ function startPolling() {
                 loadUnassignedComprovantesAbast(),
                 loadUnpaidTotals()
             ]);
-            renderDriversTable(); // Re-render to update unpaid totals
         } catch (error) {
             console.error('Polling error:', error);
         }
@@ -300,7 +301,7 @@ function renderDriversTable(filter = '') {
     };
 
     tbody.innerHTML = filtered.length === 0
-        ? '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">Nenhum usuário encontrado</td></tr>'
+        ? '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">Nenhum usuário encontrado</td></tr>'
         : filtered.map(u => {
             const isMotorista = u.userType === 'motorista';
 
@@ -314,6 +315,31 @@ function renderDriversTable(filter = '') {
                 ? '<span class="status-badge" style="background:rgba(99,102,241,0.2);color:#6366f1;">Motorista</span>'
                 : '<span class="status-badge" style="background:rgba(245,158,11,0.2);color:#f59e0b;">Abastecedor</span>';
 
+            // Authentication cell - only for drivers
+            let authCell = '-';
+            if (isMotorista) {
+                const isAuthenticated = u.authenticated === 1 || u.authenticated === true;
+                if (isAuthenticated) {
+                    authCell = '<span class="status-badge status-authenticated">Autenticado</span>';
+                } else {
+                    authCell = `<button class="btn btn-sm btn-warning" onclick="authenticateDriver(${u.id})">Autenticar</button>`;
+                }
+            }
+
+            // Format plates - show all plates for drivers with multiple plates
+            let platesDisplay = u.plate || '-';
+            if (isMotorista && u.plates) {
+                try {
+                    const additionalPlates = typeof u.plates === 'string' ? JSON.parse(u.plates) : u.plates;
+                    if (Array.isArray(additionalPlates) && additionalPlates.length > 0) {
+                        const allPlates = [u.plate, ...additionalPlates];
+                        platesDisplay = allPlates.map(p => `<span class="plate-badge">${p}</span>`).join('');
+                    }
+                } catch (e) {
+                    // If parsing fails, just show the primary plate
+                }
+            }
+
             // Actions based on user type
             const actions = isMotorista
                 ? `<button class="btn btn-sm btn-primary" onclick="openDriverPayments(${u.id})">💰 Pagamentos</button>
@@ -326,13 +352,27 @@ function renderDriversTable(filter = '') {
                 <td>${u.name}</td>
                 <td>${formatCPF(u.cpf)}</td>
                 <td>${formatPhone(u.phone)}</td>
-                <td>${u.plate || '-'}</td>
+                <td class="plates-cell">${platesDisplay}</td>
                 <td class="${unpaidClass}">${isMotorista && unpaidAmount > 0 ? formatCurrency(unpaidAmount) : '-'}</td>
                 <td><span class="${u.active ? 'status-active' : 'status-inactive'}">${u.active ? 'Ativo' : 'Inativo'}</span></td>
+                <td>${authCell}</td>
                 <td>${actions}</td>
             </tr>
         `}).join('');
 }
+
+// Authenticate a driver
+window.authenticateDriver = async function (id) {
+    try {
+        await apiRequest(`/admin/drivers/${id}/authenticate`, {
+            method: 'PATCH'
+        });
+        await loadDrivers();
+    } catch (error) {
+        console.error('Authenticate driver error:', error);
+        alert('Erro ao autenticar motorista: ' + error.message);
+    }
+};
 
 function updateDriverFilters() {
     const freightSelect = document.getElementById('freightDriverFilter');

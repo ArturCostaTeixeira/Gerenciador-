@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>CMS - Portal do Motorista</title>
+    <title>Portal do Motorista</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -61,10 +61,16 @@
                                 <input type="tel" id="signupPhone" placeholder="(00) 00000-0000" required>
                             </div>
                             <div class="input-group">
-                                <label for="signupPlate">Placa do Veículo</label>
+                                <label for="signupPlate">Placa do Veículo (Principal)</label>
                                 <input type="text" id="signupPlate" placeholder="ABC-1234"
                                     pattern="[A-Za-z]{3}-[0-9][A-Za-z0-9][0-9]{2}" required autocomplete="off">
                                 <span class="input-hint">Formato: ABC-1234 ou ABC-1D23</span>
+                            </div>
+                            <div class="input-group" id="additionalPlatesContainer">
+                                <label>Placas Adicionais (opcional)</label>
+                                <div id="additionalPlatesList"></div>
+                                <button type="button" class="btn btn-outline btn-sm" id="addPlateBtn">+ Adicionar
+                                    Placa</button>
                             </div>
                             <div class="input-group">
                                 <label for="signupPassword">Senha</label>
@@ -123,6 +129,39 @@
                         <span class="action-icon">📊</span>
                         <span class="action-text">Extrato</span>
                     </button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Waiting for Authorization Page -->
+        <div id="waitingPage" class="page hidden">
+            <header class="header glass">
+                <div class="header-left">
+                    <div class="logo-icon small"><img src="logo_excava.png" alt="Logo"
+                            style="width: 40px; height: 40px;"></div>
+                    <div class="header-title">
+                        <h1>ExcavaNorth</h1>
+                        <p id="waitingWelcome">Bem-vindo!</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <button id="waitingLogoutBtn" class="btn btn-outline">
+                        Sair
+                    </button>
+                </div>
+            </header>
+
+            <main class="waiting-content">
+                <div class="waiting-card glass">
+                    <div class="waiting-icon">⏳</div>
+                    <h2>Aguardando Autorização do Administrador</h2>
+                    <p>Sua conta foi criada com sucesso, mas ainda está aguardando aprovação do administrador.</p>
+                    <p>Por favor, aguarde enquanto verificamos seus dados. Você será notificado assim que sua conta for
+                        aprovada.</p>
+                    <div class="waiting-info">
+                        <span class="info-icon">ℹ️</span>
+                        <span>Caso tenha dúvidas, entre em contato com o administrador.</span>
+                    </div>
                 </div>
             </main>
         </div>
@@ -282,6 +321,10 @@
                     <img id="photoPreviewCarga" class="photo-preview hidden">
                 </div>
                 <div class="modal-footer camera-footer">
+                    <div class="plate-select-container hidden" id="plateSelectContainerCarga">
+                        <label>Selecione a Placa:</label>
+                        <select id="plateSelectCarga" class="plate-select"></select>
+                    </div>
                     <div class="camera-type-select">
                         <button class="btn btn-sm type-btn active" data-type="carga" id="typeCargaBtn">Carga</button>
                         <button class="btn btn-sm type-btn" data-type="descarga" id="typeDescargaBtn">Descarga</button>
@@ -309,6 +352,10 @@
                     <img id="photoPreviewAbast" class="photo-preview hidden">
                 </div>
                 <div class="modal-footer camera-footer">
+                    <div class="plate-select-container hidden" id="plateSelectContainerAbast">
+                        <label>Selecione a Placa:</label>
+                        <select id="plateSelectAbast" class="plate-select"></select>
+                    </div>
                     <div class="camera-actions">
                         <button class="btn btn-primary btn-round" id="capturePhotoAbast">📸</button>
                         <button class="btn btn-outline btn-round hidden" id="retakePhotoAbast">🔄</button>

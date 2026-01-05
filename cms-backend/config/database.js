@@ -286,6 +286,22 @@ async function initDatabase() {
         // Column already exists, ignore
     }
 
+    // Add authenticated column to drivers if it doesn't exist
+    try {
+        await exec(`ALTER TABLE drivers ADD COLUMN authenticated INTEGER DEFAULT 0`);
+        console.log('Added authenticated column to drivers');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    // Add plates column to drivers for storing additional plates as JSON array
+    try {
+        await exec(`ALTER TABLE drivers ADD COLUMN plates TEXT`);
+        console.log('Added plates column to drivers');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
     // Create default admin if not exists
     const adminExists = await queryOne('SELECT id FROM admins WHERE username = ?', ['admin']);
     if (!adminExists) {

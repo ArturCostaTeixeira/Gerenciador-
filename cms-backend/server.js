@@ -446,6 +446,25 @@ app.get('/api/abastecedor/validate-plate/:plate', requireAbastecedor, async (req
     }
 });
 
+// Abastecedor: Get all drivers (for dropdown)
+app.get('/api/abastecedor/drivers', requireAbastecedor, async (req, res) => {
+    try {
+        const drivers = await Driver.findAll(true); // Get active drivers only
+        // Filter to only include authenticated drivers
+        const authenticatedDrivers = drivers.filter(d => d.authenticated === 1 || d.authenticated === true);
+        const simpleDrivers = authenticatedDrivers.map(d => ({
+            id: d.id,
+            name: d.name,
+            plate: d.plate
+        }));
+        res.json(simpleDrivers);
+    } catch (error) {
+        console.error('Get abastecedor drivers error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+
 
 // ============================================
 // Admin Comprovantes Descarga Pool Endpoints

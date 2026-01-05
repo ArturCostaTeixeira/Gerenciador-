@@ -500,6 +500,27 @@ select.filter-input,
     background: rgba(245, 158, 11, 0.3);
 }
 
+.status-badge.status-authenticated {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--success);
+}
+
+.status-badge.status-not-authenticated {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--error);
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    border: none;
+}
+
+.btn-warning:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+}
+
 .row-pending {
     background: rgba(245, 158, 11, 0.05) !important;
 }
@@ -514,6 +535,25 @@ select.filter-input,
 
 .value-negative {
     color: var(--error);
+}
+
+/* Plate Badges */
+.plates-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.plate-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--accent-primary);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.05em;
 }
 
 /* Summary Cards */

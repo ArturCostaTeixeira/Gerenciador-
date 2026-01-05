@@ -170,4 +170,23 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+/**
+ * PATCH /api/admin/drivers/:id/authenticate
+ * Authenticate a driver (mark as verified by admin)
+ */
+router.patch('/:id/authenticate', async (req, res) => {
+    try {
+        const driver = await Driver.findById(req.params.id);
+        if (!driver) {
+            return res.status(404).json({ error: 'Driver not found' });
+        }
+
+        const updated = await Driver.update(req.params.id, { authenticated: true });
+        res.json({ message: 'Driver authenticated successfully', driver: updated });
+    } catch (error) {
+        console.error('Authenticate driver error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = router;

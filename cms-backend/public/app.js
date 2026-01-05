@@ -16,6 +16,7 @@ let extratoPollingInterval = null;
 const loginPage = document.getElementById('loginPage');
 const dashboardPage = document.getElementById('dashboardPage');
 const extratoPage = document.getElementById('extratoPage');
+const waitingPage = document.getElementById('waitingPage');
 const loginForm = document.getElementById('loginForm');
 const signupForm = document.getElementById('signupForm');
 const loginFormElement = document.getElementById('loginFormElement');
@@ -161,9 +162,11 @@ function showPage(page) {
     loginPage.classList.remove('active');
     dashboardPage.classList.remove('active');
     extratoPage.classList.remove('active');
+    waitingPage.classList.remove('active');
     loginPage.classList.add('hidden');
     dashboardPage.classList.add('hidden');
     extratoPage.classList.add('hidden');
+    waitingPage.classList.add('hidden');
 
     page.classList.remove('hidden');
     page.classList.add('active');
@@ -223,12 +226,22 @@ async function handleLogin(e) {
 
 async function handleSignup(e) {
     e.preventDefault();
-    const button = signupFormElement.querySelector('button');
+    const button = signupFormElement.querySelector('button[type="submit"]');
     const name = document.getElementById('signupName').value.trim();
     const cpf = document.getElementById('signupCpf').value.trim();
     const phone = document.getElementById('signupPhone').value.trim();
     const plate = document.getElementById('signupPlate').value.trim().toUpperCase();
     const password = document.getElementById('signupPassword').value;
+
+    // Collect additional plates
+    const additionalPlateInputs = document.querySelectorAll('.additional-plate-input');
+    const additional_plates = [];
+    additionalPlateInputs.forEach(input => {
+        const value = input.value.trim().toUpperCase();
+        if (value) {
+            additional_plates.push(value);
+        }
+    });
 
     if (!name || !cpf || !phone || !plate || !password) {
         showError('Preencha todos os campos');
@@ -260,7 +273,7 @@ async function handleSignup(e) {
     try {
         const data = await apiRequest('/auth/driver/signup', {
             method: 'POST',
-            body: JSON.stringify({ name, plate, password, phone: phoneClean, cpf: cpfClean })
+            body: JSON.stringify({ name, plate, additional_plates, password, phone: phoneClean, cpf: cpfClean })
         });
 
         token = data.token;
@@ -279,6 +292,7 @@ function logout() {
     token = null;
     userData = null;
     localStorage.removeItem('driver_token');
+    stopWaitingPolling(); // Stop any waiting page polling
     showPage(loginPage);
     loginFormElement.reset();
     signupFormElement.reset();
@@ -287,6 +301,8 @@ function logout() {
 // ========================================
 // Dashboard
 // ========================================
+
+let waitingPollingInterval = null;
 
 async function loadDashboard() {
     try {
@@ -297,6 +313,22 @@ async function loadDashboard() {
         }
         userData = verifyData.user;
 
+        // Check if driver is authenticated by admin
+        const isAuthenticated = userData.authenticated === 1 || userData.authenticated === true;
+
+        if (!isAuthenticated) {
+            // Show waiting for authorization page
+            showPage(waitingPage);
+            document.getElementById('waitingWelcome').textContent = `Olá, ${userData.name}!`;
+
+            // Start polling to check for authentication status
+            startWaitingPolling();
+            return;
+        }
+
+        // Stop waiting polling if we're authenticated
+        stopWaitingPolling();
+
         // Show dashboard
         showPage(dashboardPage);
         welcomeText.textContent = `Bem-vindo, ${userData.name}!`;
@@ -304,6 +336,36 @@ async function loadDashboard() {
     } catch (error) {
         console.error('Dashboard error:', error);
         logout();
+    }
+}
+
+// Polling to check if driver has been authenticated
+function startWaitingPolling() {
+    stopWaitingPolling(); // Clear any existing interval
+    waitingPollingInterval = setInterval(async () => {
+        try {
+            const verifyData = await apiRequest('/auth/verify');
+            if (verifyData.valid && verifyData.type === 'driver') {
+                const isAuthenticated = verifyData.user.authenticated === 1 || verifyData.user.authenticated === true;
+                if (isAuthenticated) {
+                    // Driver has been authenticated! Show success and redirect
+                    userData = verifyData.user;
+                    stopWaitingPolling();
+                    showToast('Sua conta foi aprovada! Bem-vindo!', 'success');
+                    showPage(dashboardPage);
+                    welcomeText.textContent = `Bem-vindo, ${userData.name}!`;
+                }
+            }
+        } catch (error) {
+            console.error('Waiting polling error:', error);
+        }
+    }, 3000); // Check every 3 seconds
+}
+
+function stopWaitingPolling() {
+    if (waitingPollingInterval) {
+        clearInterval(waitingPollingInterval);
+        waitingPollingInterval = null;
     }
 }
 
@@ -495,12 +557,48 @@ async function loadExtratoPagamentos() {
 // Camera Functions
 // ========================================
 
+function getAllDriverPlates() {
+    // Get all plates for the current driver (primary + additional)
+    const plates = [];
+    if (userData?.plate) {
+        plates.push(userData.plate);
+    }
+    if (userData?.plates && Array.isArray(userData.plates)) {
+        plates.push(...userData.plates);
+    }
+    return plates;
+}
+
+function populatePlateSelect(selectId, containerId) {
+    const plates = getAllDriverPlates();
+    const select = document.getElementById(selectId);
+    const container = document.getElementById(containerId);
+
+    if (plates.length > 1) {
+        // Multiple plates - show selection
+        select.innerHTML = plates.map(plate =>
+            `<option value="${plate}">${plate}</option>`
+        ).join('');
+        container.classList.remove('hidden');
+    } else {
+        // Single plate - hide selection
+        container.classList.add('hidden');
+    }
+}
+
 async function openCameraModal(modalId) {
     const modal = document.getElementById(modalId);
     modal.classList.remove('hidden');
 
     const videoId = modalId === 'cameraModalCarga' ? 'cameraVideoCarga' : 'cameraVideoAbast';
     const video = document.getElementById(videoId);
+
+    // Populate plate selection if driver has multiple plates
+    if (modalId === 'cameraModalCarga') {
+        populatePlateSelect('plateSelectCarga', 'plateSelectContainerCarga');
+    } else {
+        populatePlateSelect('plateSelectAbast', 'plateSelectContainerAbast');
+    }
 
     try {
         // Request camera with rear camera preference for mobile
@@ -602,15 +700,29 @@ function retakePhoto(modalId) {
     capturedPhotoBlob = null;
 }
 
+function getSelectedPlate(selectId) {
+    const plates = getAllDriverPlates();
+    if (plates.length > 1) {
+        const select = document.getElementById(selectId);
+        return select.value;
+    }
+    return userData?.plate || null;
+}
+
 async function sendPhotoCarga() {
     if (!capturedPhotoBlob) {
         showToast('Nenhuma foto capturada', 'error');
         return;
     }
 
+    const selectedPlate = getSelectedPlate('plateSelectCarga');
+
     const formData = new FormData();
     const filename = `comprovante_${currentPhotoType}_${Date.now()}.jpg`;
     formData.append(`comprovante_${currentPhotoType}`, capturedPhotoBlob, filename);
+    if (selectedPlate) {
+        formData.append('plate', selectedPlate);
+    }
 
     try {
         // For now, we'll upload to a general endpoint
@@ -642,9 +754,14 @@ async function sendPhotoAbast() {
         return;
     }
 
+    const selectedPlate = getSelectedPlate('plateSelectAbast');
+
     const formData = new FormData();
     const filename = `comprovante_abastecimento_${Date.now()}.jpg`;
     formData.append('comprovante_abastecimento', capturedPhotoBlob, filename);
+    if (selectedPlate) {
+        formData.append('plate', selectedPlate);
+    }
 
     try {
         const response = await fetch(`${API_BASE}/driver/upload-comprovante-abastecimento`, {
@@ -725,6 +842,36 @@ function formatPhoneInput(input) {
 }
 
 // ========================================
+// Additional Plates Management
+// ========================================
+
+let plateCounter = 0;
+
+function addAdditionalPlateInput() {
+    plateCounter++;
+    const container = document.getElementById('additionalPlatesList');
+    const div = document.createElement('div');
+    div.className = 'additional-plate-row';
+    div.id = `plateRow_${plateCounter}`;
+    div.innerHTML = `
+        <input type="text" class="additional-plate-input" placeholder="ABC-1234" autocomplete="off">
+        <button type="button" class="btn btn-sm btn-remove-plate" onclick="removeAdditionalPlate('${plateCounter}')">✕</button>
+    `;
+    container.appendChild(div);
+
+    // Add formatting to the new input
+    const input = div.querySelector('.additional-plate-input');
+    formatPlateInput(input);
+}
+
+window.removeAdditionalPlate = function (id) {
+    const row = document.getElementById(`plateRow_${id}`);
+    if (row) {
+        row.remove();
+    }
+};
+
+// ========================================
 // Initialize App
 // ========================================
 
@@ -736,6 +883,18 @@ function init() {
     showLoginLink.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
     logoutBtn.addEventListener('click', logout);
     extratoLogoutBtn.addEventListener('click', logout);
+
+    // Waiting page logout button
+    const waitingLogoutBtn = document.getElementById('waitingLogoutBtn');
+    if (waitingLogoutBtn) {
+        waitingLogoutBtn.addEventListener('click', logout);
+    }
+
+    // Add plate button
+    const addPlateBtn = document.getElementById('addPlateBtn');
+    if (addPlateBtn) {
+        addPlateBtn.addEventListener('click', addAdditionalPlateInput);
+    }
 
     // Input Formatting
     formatCPFInput(document.getElementById('loginCpf'));

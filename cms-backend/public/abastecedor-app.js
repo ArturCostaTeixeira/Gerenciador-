@@ -10,6 +10,7 @@ let userData = null;
 let currentCameraStream = null;
 let currentCameraType = null; // 'abast' or 'insumo'
 let capturedPhotoData = null;
+let driversData = []; // Store drivers for dropdown
 
 // DOM Elements
 const loginPage = document.getElementById('loginPage');
@@ -44,23 +45,29 @@ function formatCPFInput(input) {
     input.value = value;
 }
 
-function formatPlateInput(input) {
-    let value = input.value.toUpperCase();
-
-    // Remove non-alphanumeric except dash
-    value = value.replace(/[^A-Z0-9-]/g, '');
-
-    // Auto-insert dash after 3 letters
-    if (value.length >= 3 && value[3] !== '-') {
-        value = value.slice(0, 3) + '-' + value.slice(3);
+// Fetch drivers for the dropdown
+async function fetchDrivers() {
+    try {
+        const drivers = await apiRequest('/abastecedor/drivers');
+        driversData = drivers;
+        return drivers;
+    } catch (error) {
+        console.error('Failed to fetch drivers:', error);
+        return [];
     }
+}
 
-    // Limit length
-    if (value.length > 8) {
-        value = value.slice(0, 8);
-    }
+// Populate a plate select dropdown
+function populatePlateDropdown(selectElement, drivers) {
+    // Clear existing options except the first placeholder
+    selectElement.innerHTML = '<option value="">Selecione uma placa...</option>';
 
-    input.value = value;
+    drivers.forEach(driver => {
+        const option = document.createElement('option');
+        option.value = driver.plate;
+        option.textContent = `${driver.plate} - ${driver.name}`;
+        selectElement.appendChild(option);
+    });
 }
 
 async function apiRequest(endpoint, options = {}) {
@@ -221,7 +228,7 @@ async function loadDashboard() {
 // Modal Functions
 // ========================================
 
-function openModal(modalId) {
+async function openModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.remove('hidden');
@@ -229,6 +236,24 @@ function openModal(modalId) {
         const dateInput = modal.querySelector('input[type="date"]');
         if (dateInput && !dateInput.value) {
             dateInput.value = new Date().toISOString().split('T')[0];
+        }
+
+        // Fetch drivers and populate dropdown
+        if (driversData.length === 0) {
+            driversData = await fetchDrivers();
+        }
+
+        // Populate the plate dropdown based on which modal
+        if (modalId === 'modalAbastecimento') {
+            const abastPlaca = document.getElementById('abastPlaca');
+            if (abastPlaca) {
+                populatePlateDropdown(abastPlaca, driversData);
+            }
+        } else if (modalId === 'modalOutrosInsumos') {
+            const insumoPlaca = document.getElementById('insumoPlaca');
+            if (insumoPlaca) {
+                populatePlateDropdown(insumoPlaca, driversData);
+            }
         }
     }
 }
@@ -344,40 +369,27 @@ function retakePhoto(type) {
 }
 
 // ========================================
-// Plate Validation
+// Plate Selection Handler
 // ========================================
 
-let plateValidationTimeout = null;
-
-async function validatePlate(type, plate) {
+function handlePlateSelection(type, plate) {
     const statusElement = document.getElementById(`${type}PlacaStatus`);
 
-    if (!plate || plate.length < 7) {
+    if (!plate) {
         statusElement.textContent = '';
         statusElement.className = 'input-hint plate-status';
         return;
     }
 
-    // Format plate
-    const normalizedPlate = plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (normalizedPlate.length < 7) {
+    // Find the driver from our cached data
+    const driver = driversData.find(d => d.plate === plate);
+
+    if (driver) {
+        statusElement.textContent = `✓ ${driver.name}`;
+        statusElement.className = 'input-hint plate-status valid';
+    } else {
         statusElement.textContent = '';
-        return;
-    }
-
-    try {
-        const data = await apiRequest(`/abastecedor/validate-plate/${plate}`);
-
-        if (data.valid) {
-            statusElement.textContent = `✓ ${data.driver.name} (${data.driver.plate})`;
-            statusElement.className = 'input-hint plate-status valid';
-        } else {
-            statusElement.textContent = '✗ Veículo não encontrado';
-            statusElement.className = 'input-hint plate-status invalid';
-        }
-    } catch (error) {
-        statusElement.textContent = '✗ Erro ao validar placa';
-        statusElement.className = 'input-hint plate-status invalid';
+        statusElement.className = 'input-hint plate-status';
     }
 }
 
@@ -533,27 +545,19 @@ function init() {
     document.getElementById('formAbastecimento')?.addEventListener('submit', submitAbastecimento);
     document.getElementById('formOutrosInsumos')?.addEventListener('submit', submitOutrosInsumos);
 
-    // Plate input formatting and validation - Abastecimento
+    // Plate select change handler - Abastecimento
     const abastPlaca = document.getElementById('abastPlaca');
     if (abastPlaca) {
-        abastPlaca.addEventListener('input', () => {
-            formatPlateInput(abastPlaca);
-            clearTimeout(plateValidationTimeout);
-            plateValidationTimeout = setTimeout(() => {
-                validatePlate('abast', abastPlaca.value);
-            }, 500);
+        abastPlaca.addEventListener('change', () => {
+            handlePlateSelection('abast', abastPlaca.value);
         });
     }
 
-    // Plate input formatting and validation - Outros Insumos
+    // Plate select change handler - Outros Insumos
     const insumoPlaca = document.getElementById('insumoPlaca');
     if (insumoPlaca) {
-        insumoPlaca.addEventListener('input', () => {
-            formatPlateInput(insumoPlaca);
-            clearTimeout(plateValidationTimeout);
-            plateValidationTimeout = setTimeout(() => {
-                validatePlate('insumo', insumoPlaca.value);
-            }, 500);
+        insumoPlaca.addEventListener('change', () => {
+            handlePlateSelection('insumo', insumoPlaca.value);
         });
     }
 

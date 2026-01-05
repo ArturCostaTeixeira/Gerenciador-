@@ -9,11 +9,11 @@ const { generateToken, verifyToken } = require('../middleware/auth');
 /**
  * POST /api/auth/driver/signup
  * Driver sign-up (one-time registration)
- * Creates driver with name, plate, password, phone, and CPF
+ * Creates driver with name, plate, additional_plates, password, phone, and CPF
  */
 router.post('/driver/signup', async (req, res) => {
     try {
-        const { name, plate, password, phone, cpf } = req.body;
+        const { name, plate, additional_plates, password, phone, cpf } = req.body;
 
         // Validate input
         if (!name || !plate || !password || !phone || !cpf) {
@@ -46,10 +46,31 @@ router.post('/driver/signup', async (req, res) => {
 
         const normalizedPlate = normalizePlate(plate);
 
-        // Check if plate already exists
+        // Check if primary plate already exists
         const existingPlate = await Driver.findByPlate(normalizedPlate);
         if (existingPlate) {
             return res.status(409).json({ error: 'Placa já cadastrada no sistema' });
+        }
+
+        // Validate and normalize additional plates if provided
+        let normalizedAdditionalPlates = [];
+        if (additional_plates && Array.isArray(additional_plates) && additional_plates.length > 0) {
+            for (const addPlate of additional_plates) {
+                if (addPlate && addPlate.trim()) {
+                    if (!isValidPlate(addPlate)) {
+                        return res.status(400).json({ error: `Formato de placa adicional inválido: ${addPlate}` });
+                    }
+                    const normalizedAddPlate = normalizePlate(addPlate);
+
+                    // Check if this additional plate already exists
+                    const existingAddPlate = await Driver.findByPlate(normalizedAddPlate);
+                    if (existingAddPlate) {
+                        return res.status(409).json({ error: `Placa ${normalizedAddPlate} já cadastrada no sistema` });
+                    }
+
+                    normalizedAdditionalPlates.push(normalizedAddPlate);
+                }
+            }
         }
 
         // Check if CPF already exists
@@ -64,10 +85,11 @@ router.post('/driver/signup', async (req, res) => {
             return res.status(409).json({ error: 'Telefone já cadastrado no sistema' });
         }
 
-        // Create driver with password, phone, and CPF
+        // Create driver with password, phone, CPF, and additional plates
         const driver = await Driver.create({
             name: name.trim(),
             plate: normalizedPlate,
+            plates: normalizedAdditionalPlates,
             price_per_km_ton: 0, // Default, admin will update
             client: null,
             password: password,
@@ -248,7 +270,7 @@ router.post('/abastecedor/login', async (req, res) => {
  * GET /api/auth/verify
  * Verify token and return user info
  */
-router.get('/verify', (req, res) => {
+router.get('/verify', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ valid: false, error: 'No token provided' });
@@ -262,11 +284,30 @@ router.get('/verify', (req, res) => {
     }
 
     let user = { id: decoded.id };
+
     if (decoded.type === 'admin') {
         user.username = decoded.username;
     } else if (decoded.type === 'driver') {
-        user.name = decoded.name;
-        user.plate = decoded.plate;
+        // Fetch fresh driver data from database to get current authenticated status
+        try {
+            const driver = await Driver.findById(decoded.id);
+            if (driver) {
+                user.name = driver.name;
+                user.plate = driver.plate;
+                user.plates = driver.plates ? JSON.parse(driver.plates) : [];
+                user.authenticated = driver.authenticated;
+                user.active = driver.active;
+            } else {
+                user.name = decoded.name;
+                user.plate = decoded.plate;
+                user.plates = [];
+            }
+        } catch (error) {
+            console.error('Error fetching driver in verify:', error);
+            user.name = decoded.name;
+            user.plate = decoded.plate;
+            user.plates = [];
+        }
     } else if (decoded.type === 'abastecedor') {
         user.name = decoded.name;
         user.cpf = decoded.cpf;

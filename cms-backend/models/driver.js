@@ -4,19 +4,22 @@ const bcrypt = require('bcryptjs');
 const Driver = {
     /**
      * Create a new driver
-     * @param {Object} data - {name, plate, client, password, phone, cpf}
+     * @param {Object} data - {name, plate, plates, client, password, phone, cpf}
      * @returns {Object} - Created driver
      */
     async create(data) {
-        const { name, plate, price_per_km_ton, client, password, phone, cpf } = data;
+        const { name, plate, plates, price_per_km_ton, client, password, phone, cpf } = data;
 
         // Hash password if provided
         const hashedPassword = password ? bcrypt.hashSync(password, 10) : null;
 
+        // Store plates as JSON string if provided
+        const platesJson = plates && plates.length > 0 ? JSON.stringify(plates) : null;
+
         const result = await execute(`
-            INSERT INTO drivers (name, plate, price_per_km_ton, client, password, phone, cpf)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [name, plate, price_per_km_ton || 0, client || null, hashedPassword, phone || null, cpf || null]);
+            INSERT INTO drivers (name, plate, plates, price_per_km_ton, client, password, phone, cpf)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [name, plate, platesJson, price_per_km_ton || 0, client || null, hashedPassword, phone || null, cpf || null]);
 
         return this.findById(result.lastInsertRowid);
     },
@@ -89,7 +92,7 @@ const Driver = {
      * @returns {Object|null} - Updated driver or null
      */
     async update(id, data) {
-        const { name, plate, price_per_km_ton, client, active, phone, cpf } = data;
+        const { name, plate, plates, price_per_km_ton, client, active, phone, cpf, authenticated } = data;
         const updates = [];
         const values = [];
 
@@ -100,6 +103,10 @@ const Driver = {
         if (plate !== undefined) {
             updates.push('plate = ?');
             values.push(plate);
+        }
+        if (plates !== undefined) {
+            updates.push('plates = ?');
+            values.push(plates && plates.length > 0 ? JSON.stringify(plates) : null);
         }
         if (price_per_km_ton !== undefined) {
             updates.push('price_per_km_ton = ?');
@@ -120,6 +127,10 @@ const Driver = {
         if (cpf !== undefined) {
             updates.push('cpf = ?');
             values.push(cpf);
+        }
+        if (authenticated !== undefined) {
+            updates.push('authenticated = ?');
+            values.push(authenticated ? 1 : 0);
         }
 
         if (updates.length === 0) return this.findById(id);

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>CMS - Portal do Abastecedor</title>
+    <title>Portal do Abastecedor</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="abastecedor-styles.css">
 </head>
@@ -94,7 +94,9 @@
                     <form id="formAbastecimento">
                         <div class="input-group">
                             <label for="abastPlaca">Placa do Veículo</label>
-                            <input type="text" id="abastPlaca" placeholder="ABC-1234" required autocomplete="off">
+                            <select id="abastPlaca" required>
+                                <option value="">Selecione uma placa...</option>
+                            </select>
                             <span class="input-hint plate-status" id="abastPlacaStatus"></span>
                         </div>
                         <div class="input-group">
@@ -152,7 +154,9 @@
                     <form id="formOutrosInsumos">
                         <div class="input-group">
                             <label for="insumoPlaca">Placa do Veículo</label>
-                            <input type="text" id="insumoPlaca" placeholder="ABC-1234" required autocomplete="off">
+                            <select id="insumoPlaca" required>
+                                <option value="">Selecione uma placa...</option>
+                            </select>
                             <span class="input-hint plate-status" id="insumoPlacaStatus"></span>
                         </div>
                         <div class="input-group">
