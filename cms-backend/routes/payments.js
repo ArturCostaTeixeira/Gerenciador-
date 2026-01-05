@@ -1,30 +1,14 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const router = express.Router();
 const Payment = require('../models/payment');
 const Freight = require('../models/freight');
 const { requireAdmin } = require('../middleware/auth');
+const { uploadToBlob } = require('../utils/blobStorage');
 
-// Configure multer for payment proof uploads
-const uploadsDir = path.join(__dirname, '..', 'public', 'uploads', 'payments');
-
-// Ensure uploads directory exists
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadsDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname).toLowerCase();
-        cb(null, `payment-${uniqueSuffix}${ext}`);
-    }
-});
+// Configure multer with memory storage for Vercel Blob
+const memoryStorage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png/;
@@ -38,7 +22,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({
-    storage,
+    storage: memoryStorage,
     fileFilter,
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
@@ -52,24 +36,35 @@ router.use(requireAdmin);
  */
 router.post('/', upload.single('comprovante'), async (req, res) => {
     try {
-        const { driver_id, date_range, total_value, freight_ids } = req.body;
+        const { driver_id, date_range, total_value, freight_ids, abastecimento_ids, outros_insumo_ids } = req.body;
 
-        if (!driver_id || !date_range || !total_value || !freight_ids) {
+        if (!driver_id || !date_range || total_value === undefined) {
             return res.status(400).json({
-                error: 'driver_id, date_range, total_value, and freight_ids are required'
+                error: 'driver_id, date_range, and total_value are required'
             });
         }
 
-        let parsedFreightIds;
+        let parsedFreightIds = [];
+        let parsedAbastecimentoIds = [];
+        let parsedOutrosInsumoIds = [];
+
         try {
-            parsedFreightIds = JSON.parse(freight_ids);
+            if (freight_ids) parsedFreightIds = JSON.parse(freight_ids);
+            if (abastecimento_ids) parsedAbastecimentoIds = JSON.parse(abastecimento_ids);
+            if (outros_insumo_ids) parsedOutrosInsumoIds = JSON.parse(outros_insumo_ids);
         } catch (e) {
-            return res.status(400).json({ error: 'freight_ids must be a valid JSON array' });
+            return res.status(400).json({ error: 'IDs must be valid JSON arrays' });
         }
 
+        // Handle file upload with Vercel Blob
         let comprovante_path = null;
         if (req.file) {
-            comprovante_path = '/uploads/payments/' + req.file.filename;
+            const file = req.file;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+            const filename = `payment-${uniqueSuffix}${ext}`;
+            const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+            comprovante_path = url;
         }
 
         const payment = await Payment.create({
@@ -77,7 +72,9 @@ router.post('/', upload.single('comprovante'), async (req, res) => {
             date_range,
             total_value: parseFloat(total_value),
             comprovante_path,
-            freight_ids: parsedFreightIds
+            freight_ids: parsedFreightIds,
+            abastecimento_ids: parsedAbastecimentoIds,
+            outros_insumo_ids: parsedOutrosInsumoIds
         });
 
         res.status(201).json(payment);
@@ -141,8 +138,14 @@ router.put('/:id', upload.single('comprovante'), async (req, res) => {
 
         const updateData = {};
 
+        // Handle file upload with Vercel Blob
         if (req.file) {
-            updateData.comprovante_path = '/uploads/payments/' + req.file.filename;
+            const file = req.file;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+            const filename = `payment-${uniqueSuffix}${ext}`;
+            const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+            updateData.comprovante_path = url;
         }
 
         const updated = await Payment.update(paymentId, updateData);

@@ -7,6 +7,7 @@ const fs = require('fs');
 
 // Import database utilities
 const { initDatabase, execute } = require('./config/database');
+const { uploadToBlob } = require('./utils/blobStorage');
 
 const authRoutes = require('./routes/auth');
 const driverRoutes = require('./routes/drivers');
@@ -14,7 +15,8 @@ const { adminRouter: adminFreightRoutes, driverRouter: driverFreightRoutes } = r
 const { adminRouter: adminAbastecimentoRoutes, driverRouter: driverAbastecimentoRoutes } = require('./routes/abastecimentos');
 const { adminRouter: adminOutrosInsumoRoutes, driverRouter: driverOutrosInsumoRoutes } = require('./routes/outrosinsumos');
 const paymentRoutes = require('./routes/payments');
-const { requireDriver, requireAdmin } = require('./middleware/auth');
+const abastecedorRoutes = require('./routes/abastecedores');
+const { requireDriver, requireAdmin, requireAbastecedor } = require('./middleware/auth');
 const Driver = require('./models/driver');
 const Freight = require('./models/freight');
 const Abastecimento = require('./models/abastecimento');
@@ -28,25 +30,11 @@ const { query, queryOne } = require('./config/database');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Configure multer for driver uploads
-const driverUploadsDir = path.join(__dirname, 'public', 'uploads', 'driver-comprovantes');
-if (!fs.existsSync(driverUploadsDir)) {
-    fs.mkdirSync(driverUploadsDir, { recursive: true });
-}
-
-const driverStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, driverUploadsDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-        cb(null, `driver-${req.driver.id}-${uniqueSuffix}${ext}`);
-    }
-});
+// Configure multer with memory storage for Vercel Blob
+const memoryStorage = multer.memoryStorage();
 
 const driverUpload = multer({
-    storage: driverStorage,
+    storage: memoryStorage,
     fileFilter: (req, file, cb) => {
         const allowedTypes = /jpeg|jpg|png/;
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
@@ -81,6 +69,7 @@ app.use('/api/admin/freights', adminFreightRoutes);
 app.use('/api/admin/abastecimentos', adminAbastecimentoRoutes);
 app.use('/api/admin/outrosinsumos', adminOutrosInsumoRoutes);
 app.use('/api/admin/payments', paymentRoutes);
+app.use('/api/admin/abastecedores', abastecedorRoutes);
 app.use('/api/driver/freights', driverFreightRoutes);
 app.use('/api/driver/abastecimentos', driverAbastecimentoRoutes);
 app.use('/api/driver/outrosinsumos', driverOutrosInsumoRoutes);
@@ -171,12 +160,18 @@ app.post('/api/driver/upload-comprovante', requireDriver, driverUpload.fields([
         let createdComprovanteDescarga = null;
 
         if (req.files) {
+            const today = new Date().toISOString().split('T')[0];
+
             // If uploading comprovante_carga, create a new pending freight AND add to pool
             if (req.files['comprovante_carga'] && req.files['comprovante_carga'][0]) {
-                const comprovantePath = '/uploads/driver-comprovantes/' + req.files['comprovante_carga'][0].filename;
-                uploadedFiles.comprovante_carga = comprovantePath;
+                const file = req.files['comprovante_carga'][0];
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+                const filename = `driver-${driverId}-carga-${uniqueSuffix}${ext}`;
 
-                const today = new Date().toISOString().split('T')[0];
+                // Upload to Vercel Blob
+                const { url: comprovantePath } = await uploadToBlob(file.buffer, filename, file.mimetype);
+                uploadedFiles.comprovante_carga = comprovantePath;
 
                 // Create a new pending freight with today's date
                 createdFreight = await Freight.createPending({
@@ -202,11 +197,16 @@ app.post('/api/driver/upload-comprovante', requireDriver, driverUpload.fields([
 
             // If uploading comprovante_descarga, add to the pool
             if (req.files['comprovante_descarga'] && req.files['comprovante_descarga'][0]) {
-                const comprovantePath = '/uploads/driver-comprovantes/' + req.files['comprovante_descarga'][0].filename;
+                const file = req.files['comprovante_descarga'][0];
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+                const filename = `driver-${driverId}-descarga-${uniqueSuffix}${ext}`;
+
+                // Upload to Vercel Blob
+                const { url: comprovantePath } = await uploadToBlob(file.buffer, filename, file.mimetype);
                 uploadedFiles.comprovante_descarga = comprovantePath;
 
                 // Add to pool with today's date
-                const today = new Date().toISOString().split('T')[0];
                 createdComprovanteDescarga = await ComprovanteDescarga.create({
                     driver_id: driverId,
                     file_path: comprovantePath,
@@ -237,7 +237,13 @@ app.post('/api/driver/upload-comprovante-abastecimento', requireDriver, driverUp
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
-        const filePath = '/uploads/driver-comprovantes/' + req.file.filename;
+        const file = req.file;
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+        const filename = `driver-${driverId}-abastecimento-${uniqueSuffix}${ext}`;
+
+        // Upload to Vercel Blob
+        const { url: filePath } = await uploadToBlob(file.buffer, filename, file.mimetype);
         const today = new Date().toISOString().split('T')[0];
 
         // Create a pending abastecimento with the comprovante
@@ -277,6 +283,169 @@ app.post('/api/driver/upload-comprovante-abastecimento', requireDriver, driverUp
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// ============================================
+// Abastecedor Routes
+// ============================================
+
+// Abastecedor profile route
+app.get('/api/abastecedor/profile', requireAbastecedor, async (req, res) => {
+    try {
+        const Abastecedor = require('./models/abastecedor');
+        const abastecedor = await Abastecedor.findById(req.abastecedor.id);
+        if (!abastecedor) {
+            return res.status(404).json({ error: 'Abastecedor not found' });
+        }
+        // Don't expose password
+        const { password, ...safeAbastecedor } = abastecedor;
+        res.json(safeAbastecedor);
+    } catch (error) {
+        console.error('Get abastecedor profile error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Abastecedor: Submit abastecimento by plate
+app.post('/api/abastecedor/abastecimento', requireAbastecedor, driverUpload.single('comprovante'), async (req, res) => {
+    try {
+        const { plate, date, liters } = req.body;
+
+        // Validate input
+        if (!plate || !date || !liters) {
+            return res.status(400).json({ error: 'Placa, data e litros são obrigatórios' });
+        }
+
+        // Find driver by plate
+        const driver = await Driver.findByPlate(plate);
+        if (!driver) {
+            return res.status(404).json({ error: 'Veículo não encontrado com esta placa' });
+        }
+
+        let comprovantePath = null;
+
+        // Handle file upload if provided
+        if (req.file) {
+            const file = req.file;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+            const filename = `abastecedor-${req.abastecedor.id}-abast-${uniqueSuffix}${ext}`;
+
+            // Upload to Vercel Blob
+            const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+            comprovantePath = url;
+        }
+
+        // Create the abastecimento with status 'complete' (since abastecedor provides liters)
+        // Use default price per liter of 0 - admin will update
+        const abastecimento = await Abastecimento.create({
+            driver_id: driver.id,
+            date: date,
+            quantity: parseFloat(liters),
+            price_per_liter: 0, // Admin will set the price later
+            comprovante_abastecimento: comprovantePath
+        });
+
+        // Add comprovante to pool if provided
+        if (comprovantePath) {
+            const comprovante = await ComprovanteAbastecimento.create({
+                driver_id: driver.id,
+                file_path: comprovantePath,
+                date: date
+            });
+
+            // Mark as assigned to this abastecimento
+            if (abastecimento && comprovante) {
+                await execute(`
+                    UPDATE comprovantes_abastecimento SET assigned_abastecimento_id = ? WHERE id = ?
+                `, [abastecimento.id, comprovante.id]);
+            }
+        }
+
+        res.status(201).json({
+            message: 'Abastecimento registrado com sucesso',
+            abastecimento
+        });
+    } catch (error) {
+        console.error('Abastecedor submit abastecimento error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Abastecedor: Submit outros insumos by plate
+app.post('/api/abastecedor/outros-insumos', requireAbastecedor, driverUpload.single('comprovante'), async (req, res) => {
+    try {
+        const { plate, date, quantity, description } = req.body;
+
+        // Validate input
+        if (!plate || !date || !quantity) {
+            return res.status(400).json({ error: 'Placa, data e quantidade são obrigatórios' });
+        }
+
+        // Find driver by plate
+        const driver = await Driver.findByPlate(plate);
+        if (!driver) {
+            return res.status(404).json({ error: 'Veículo não encontrado com esta placa' });
+        }
+
+        let comprovantePath = null;
+
+        // Handle file upload if provided
+        if (req.file) {
+            const file = req.file;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+            const filename = `abastecedor-${req.abastecedor.id}-insumo-${uniqueSuffix}${ext}`;
+
+            // Upload to Vercel Blob
+            const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+            comprovantePath = url;
+        }
+
+        // Create the outros insumo with status 'complete'
+        // Use default unit price of 0 - admin will update
+        const outrosInsumo = await OutrosInsumo.create({
+            driver_id: driver.id,
+            date: date,
+            quantity: parseFloat(quantity),
+            description: description || 'Outros Insumos',
+            unit_price: 0 // Admin will set the price later
+        });
+
+        res.status(201).json({
+            message: 'Outros Insumos registrado com sucesso',
+            outrosInsumo,
+            comprovante: comprovantePath
+        });
+    } catch (error) {
+        console.error('Abastecedor submit outros insumos error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Validate plate endpoint for abastecedor
+app.get('/api/abastecedor/validate-plate/:plate', requireAbastecedor, async (req, res) => {
+    try {
+        const plate = req.params.plate.toUpperCase();
+        const driver = await Driver.findByPlate(plate);
+
+        if (!driver) {
+            return res.json({ valid: false, message: 'Veículo não encontrado' });
+        }
+
+        res.json({
+            valid: true,
+            driver: {
+                id: driver.id,
+                name: driver.name,
+                plate: driver.plate
+            }
+        });
+    } catch (error) {
+        console.error('Validate plate error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 
 // ============================================
 // Admin Comprovantes Descarga Pool Endpoints
@@ -602,12 +771,19 @@ app.get('/portal', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Abastecedor portal route
+app.get('/abastecedor', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'abastecedor.html'));
+});
+
 // SPA fallback - serve appropriate page based on path
 app.get('*', (req, res) => {
     if (req.path.startsWith('/api')) {
         res.status(404).json({ error: 'Endpoint not found' });
     } else if (req.path.startsWith('/admin')) {
         res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    } else if (req.path.startsWith('/abastecedor')) {
+        res.sendFile(path.join(__dirname, 'public', 'abastecedor.html'));
     } else if (req.path === '/' || req.path === '') {
         // Root serves landing page
         res.sendFile(path.join(__dirname, 'public', 'landing.html'));

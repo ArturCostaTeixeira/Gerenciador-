@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Driver = require('../models/driver');
 const Admin = require('../models/admin');
+const Abastecedor = require('../models/abastecedor');
 const { isValidPlate, normalizePlate, isValidCPF } = require('../utils/validators');
 const { generateToken, verifyToken } = require('../middleware/auth');
 
@@ -98,33 +99,33 @@ router.post('/driver/signup', async (req, res) => {
 
 /**
  * POST /api/auth/driver/login
- * Driver login with plate and password
+ * Driver login with CPF and password
  * Returns JWT token
  */
 router.post('/driver/login', async (req, res) => {
     try {
-        const { plate, password } = req.body;
+        const { cpf, password } = req.body;
 
         // Validate input
-        if (!plate || !password) {
-            return res.status(400).json({ error: 'Plate and password are required' });
+        if (!cpf || !password) {
+            return res.status(400).json({ error: 'CPF e senha são obrigatórios' });
         }
 
-        if (!isValidPlate(plate)) {
-            return res.status(400).json({ error: 'Invalid plate format. Use ABC-1234 or ABC-1D23' });
+        // Clean CPF (remove formatting)
+        const cleanCpf = cpf.replace(/\D/g, '');
+        if (cleanCpf.length !== 11) {
+            return res.status(400).json({ error: 'CPF inválido. Deve ter 11 dígitos.' });
         }
 
-        const normalizedPlate = normalizePlate(plate);
-
-        // Verify password
-        const driver = await Driver.verifyPassword(normalizedPlate, password);
+        // Verify password using CPF
+        const driver = await Driver.verifyPasswordByCpf(cleanCpf, password);
 
         if (!driver) {
-            return res.status(401).json({ error: 'Invalid plate or password' });
+            return res.status(401).json({ error: 'CPF ou senha inválidos' });
         }
 
         if (!driver.active) {
-            return res.status(401).json({ error: 'Driver account is inactive' });
+            return res.status(401).json({ error: 'Conta do motorista está inativa' });
         }
 
         // Generate JWT token
@@ -190,6 +191,60 @@ router.post('/admin/login', async (req, res) => {
 });
 
 /**
+ * POST /api/auth/abastecedor/login
+ * Abastecedor login with CPF and password
+ * Returns JWT token
+ */
+router.post('/abastecedor/login', async (req, res) => {
+    try {
+        const { cpf, password } = req.body;
+
+        // Validate input
+        if (!cpf || !password) {
+            return res.status(400).json({ error: 'CPF e senha são obrigatórios' });
+        }
+
+        // Clean CPF
+        const cpfClean = cpf.replace(/\D/g, '');
+
+        // Validate CPF format
+        if (!isValidCPF(cpfClean)) {
+            return res.status(400).json({ error: 'CPF inválido' });
+        }
+
+        // Verify password
+        const abastecedor = await Abastecedor.verifyPassword(cpfClean, password);
+
+        if (!abastecedor) {
+            return res.status(401).json({ error: 'CPF ou senha inválidos' });
+        }
+
+        if (!abastecedor.active) {
+            return res.status(401).json({ error: 'Conta de abastecedor inativa' });
+        }
+
+        // Generate JWT token
+        const token = generateToken({
+            id: abastecedor.id,
+            name: abastecedor.name,
+            cpf: abastecedor.cpf
+        }, 'abastecedor');
+
+        res.json({
+            message: 'Login successful',
+            token,
+            abastecedor: {
+                id: abastecedor.id,
+                name: abastecedor.name
+            }
+        });
+    } catch (error) {
+        console.error('Abastecedor login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
  * GET /api/auth/verify
  * Verify token and return user info
  */
@@ -206,14 +261,23 @@ router.get('/verify', (req, res) => {
         return res.status(401).json({ valid: false, error: 'Invalid or expired token' });
     }
 
+    let user = { id: decoded.id };
+    if (decoded.type === 'admin') {
+        user.username = decoded.username;
+    } else if (decoded.type === 'driver') {
+        user.name = decoded.name;
+        user.plate = decoded.plate;
+    } else if (decoded.type === 'abastecedor') {
+        user.name = decoded.name;
+        user.cpf = decoded.cpf;
+    }
+
     res.json({
         valid: true,
         type: decoded.type,
-        user: {
-            id: decoded.id,
-            ...(decoded.type === 'admin' ? { username: decoded.username } : { name: decoded.name, plate: decoded.plate })
-        }
+        user
     });
 });
 
 module.exports = router;
+

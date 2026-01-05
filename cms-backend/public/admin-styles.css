@@ -473,6 +473,33 @@ select.filter-input,
     font-weight: 600;
 }
 
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: all var(--transition-fast);
+}
+
+.status-badge.status-paid {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--success);
+}
+
+.status-badge.status-paid:hover {
+    background: rgba(16, 185, 129, 0.3);
+}
+
+.status-badge.status-pending {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--warning);
+}
+
+.status-badge.status-pending:hover {
+    background: rgba(245, 158, 11, 0.3);
+}
+
 .row-pending {
     background: rgba(245, 158, 11, 0.05) !important;
 }
@@ -1021,4 +1048,62 @@ select.filter-input,
 
 .payment-check:checked {
     transform: scale(1.1);
+}
+
+/* Payment Summary Box */
+.payment-summary-box {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.payment-summary-box .summary-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    font-size: 0.95rem;
+}
+
+.payment-summary-box .summary-item.positive span:last-child {
+    color: var(--success);
+    font-weight: 600;
+}
+
+.payment-summary-box .summary-item.negative span:last-child {
+    color: var(--error);
+    font-weight: 600;
+}
+
+.payment-summary-box .summary-item.total {
+    border-top: 2px solid var(--border-color);
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.payment-summary-box .summary-item.total span:last-child {
+    color: var(--accent-primary);
+}
+
+/* Payment Section */
+.payment-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.payment-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.payment-section h3 {
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+    font-weight: 600;
 }

@@ -3,26 +3,44 @@ const { execute, query, queryOne } = require('../config/database');
 const Payment = {
     /**
      * Create a new payment record
-     * @param {Object} data - {driver_id, date_range, total_value, comprovante_path, freight_ids}
+     * @param {Object} data - {driver_id, date_range, total_value, comprovante_path, freight_ids, abastecimento_ids, outros_insumo_ids}
      * @returns {Object} - Created payment
      */
     async create(data) {
-        const { driver_id, date_range, total_value, comprovante_path, freight_ids } = data;
+        const { driver_id, date_range, total_value, comprovante_path, freight_ids, abastecimento_ids, outros_insumo_ids } = data;
 
         const result = await execute(`
-            INSERT INTO payments (driver_id, date_range, total_value, comprovante_path, freight_ids)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO payments (driver_id, date_range, total_value, comprovante_path, freight_ids, abastecimento_ids, outros_insumo_ids)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `, [
             driver_id,
             date_range,
             total_value,
             comprovante_path || null,
-            JSON.stringify(freight_ids)
+            JSON.stringify(freight_ids || []),
+            JSON.stringify(abastecimento_ids || []),
+            JSON.stringify(outros_insumo_ids || [])
         ]);
 
         // Mark all associated freights as paid
-        for (const id of freight_ids) {
-            await execute(`UPDATE freights SET paid = 1 WHERE id = ?`, [id]);
+        if (freight_ids && freight_ids.length > 0) {
+            for (const id of freight_ids) {
+                await execute(`UPDATE freights SET paid = 1 WHERE id = ?`, [id]);
+            }
+        }
+
+        // Mark all associated abastecimentos as paid
+        if (abastecimento_ids && abastecimento_ids.length > 0) {
+            for (const id of abastecimento_ids) {
+                await execute(`UPDATE abastecimentos SET paid = 1 WHERE id = ?`, [id]);
+            }
+        }
+
+        // Mark all associated outros insumos as paid
+        if (outros_insumo_ids && outros_insumo_ids.length > 0) {
+            for (const id of outros_insumo_ids) {
+                await execute(`UPDATE outros_insumos SET paid = 1 WHERE id = ?`, [id]);
+            }
         }
 
         return this.findById(result.lastInsertRowid);
@@ -42,7 +60,9 @@ const Payment = {
         `, [id]);
 
         if (payment) {
-            payment.freight_ids = JSON.parse(payment.freight_ids);
+            payment.freight_ids = JSON.parse(payment.freight_ids || '[]');
+            payment.abastecimento_ids = JSON.parse(payment.abastecimento_ids || '[]');
+            payment.outros_insumo_ids = JSON.parse(payment.outros_insumo_ids || '[]');
         }
         return payment;
     },
@@ -63,7 +83,9 @@ const Payment = {
 
         return payments.map(p => ({
             ...p,
-            freight_ids: JSON.parse(p.freight_ids)
+            freight_ids: JSON.parse(p.freight_ids || '[]'),
+            abastecimento_ids: JSON.parse(p.abastecimento_ids || '[]'),
+            outros_insumo_ids: JSON.parse(p.outros_insumo_ids || '[]')
         }));
     },
 
@@ -81,7 +103,9 @@ const Payment = {
 
         return payments.map(p => ({
             ...p,
-            freight_ids: JSON.parse(p.freight_ids)
+            freight_ids: JSON.parse(p.freight_ids || '[]'),
+            abastecimento_ids: JSON.parse(p.abastecimento_ids || '[]'),
+            outros_insumo_ids: JSON.parse(p.outros_insumo_ids || '[]')
         }));
     },
 
@@ -109,7 +133,7 @@ const Payment = {
     },
 
     /**
-     * Delete payment and unmark associated freights
+     * Delete payment and unmark associated items
      * @param {number} id - Payment ID
      * @returns {boolean} - Success
      */
@@ -118,8 +142,24 @@ const Payment = {
         if (!payment) return false;
 
         // Unmark freights as paid
-        for (const fId of payment.freight_ids) {
-            await execute(`UPDATE freights SET paid = 0 WHERE id = ?`, [fId]);
+        if (payment.freight_ids && payment.freight_ids.length > 0) {
+            for (const fId of payment.freight_ids) {
+                await execute(`UPDATE freights SET paid = 0 WHERE id = ?`, [fId]);
+            }
+        }
+
+        // Unmark abastecimentos as paid
+        if (payment.abastecimento_ids && payment.abastecimento_ids.length > 0) {
+            for (const aId of payment.abastecimento_ids) {
+                await execute(`UPDATE abastecimentos SET paid = 0 WHERE id = ?`, [aId]);
+            }
+        }
+
+        // Unmark outros insumos as paid
+        if (payment.outros_insumo_ids && payment.outros_insumo_ids.length > 0) {
+            for (const oId of payment.outros_insumo_ids) {
+                await execute(`UPDATE outros_insumos SET paid = 0 WHERE id = ?`, [oId]);
+            }
         }
 
         const result = await execute('DELETE FROM payments WHERE id = ?', [id]);

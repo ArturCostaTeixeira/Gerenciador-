@@ -116,6 +116,51 @@ const OutrosInsumo = {
     },
 
     /**
+     * Update outros insumo by ID
+     * @param {number} id - Outros insumo ID
+     * @param {Object} data - Fields to update
+     * @returns {Object|null} - Updated outros insumo or null
+     */
+    async update(id, data) {
+        const { date, quantity, description, unit_price, total_value, comprovante } = data;
+        const updates = [];
+        const values = [];
+
+        if (date !== undefined) {
+            updates.push('date = ?');
+            values.push(date);
+        }
+        if (quantity !== undefined) {
+            updates.push('quantity = ?');
+            values.push(quantity);
+        }
+        if (description !== undefined) {
+            updates.push('description = ?');
+            values.push(description);
+        }
+        if (unit_price !== undefined) {
+            updates.push('unit_price = ?');
+            values.push(unit_price);
+        }
+        if (total_value !== undefined) {
+            updates.push('total_value = ?');
+            values.push(total_value);
+        }
+        if (comprovante !== undefined) {
+            updates.push('comprovante = ?');
+            values.push(comprovante);
+        }
+
+        if (updates.length === 0) {
+            return this.findById(id);
+        }
+
+        values.push(id);
+        await execute(`UPDATE outros_insumos SET ${updates.join(', ')} WHERE id = ?`, values);
+        return this.findById(id);
+    },
+
+    /**
      * Delete outros insumo by ID
      * @param {number} id - Outros insumo ID
      * @returns {boolean} - Success

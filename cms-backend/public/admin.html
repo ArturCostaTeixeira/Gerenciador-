@@ -51,7 +51,7 @@
                 <nav class="sidebar-nav">
                     <button class="nav-item active" data-page="drivers">
                         <span class="nav-icon">👤</span>
-                        <span class="nav-text">Motoristas</span>
+                        <span class="nav-text">Usuários</span>
                     </button>
                     <button class="nav-item" data-page="freights">
                         <span class="nav-icon">📦</span>
@@ -80,8 +80,8 @@
                 <!-- Drivers Page -->
                 <section id="driversPage" class="content-page active">
                     <div class="page-header">
-                        <h1>👤 Motoristas</h1>
-                        <button class="btn btn-primary" id="addDriverBtn">+ Novo Motorista</button>
+                        <h1>👤 Usuários</h1>
+                        <button class="btn btn-primary" id="addDriverBtn">+ Novo Usuário</button>
                     </div>
                     <div class="filters glass">
                         <input type="text" id="driverSearch" class="filter-input" placeholder="Buscar por nome...">
@@ -90,6 +90,7 @@
                         <table class="data-table" id="driversTable">
                             <thead>
                                 <tr>
+                                    <th>Tipo</th>
                                     <th>Nome</th>
                                     <th>CPF</th>
                                     <th>Telefone</th>
@@ -117,25 +118,86 @@
                         <button class="payment-tab" data-tab="paid">Pagos</button>
                     </div>
 
-                    <!-- Unpaid Freights Tab -->
+                    <!-- Unpaid Items Tab -->
                     <div id="unpaidTab" class="payment-tab-content">
                         <div class="card glass">
                             <div class="card-header-payment">
-                                <h2>Fretes Não Pagos</h2>
+                                <h2>Itens Não Pagos</h2>
                                 <button class="btn btn-primary" id="generatePaymentBtn">Gerar Pagamento</button>
                             </div>
-                            <div class="table-container">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Data</th>
-                                            <th>Motorista</th>
-                                            <th>Valor</th>
-                                            <th>Pago</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="unpaidFreightsBody"></tbody>
-                                </table>
+
+                            <!-- Net Total Summary -->
+                            <div class="payment-summary-box" id="paymentSummaryBox">
+                                <div class="summary-item positive">
+                                    <span>Fretes Selecionados:</span>
+                                    <span id="selectedFreightsTotal">R$ 0,00</span>
+                                </div>
+                                <div class="summary-item negative">
+                                    <span>Abastecimentos Selecionados:</span>
+                                    <span id="selectedAbastTotal">-R$ 0,00</span>
+                                </div>
+                                <div class="summary-item negative">
+                                    <span>Outros Insumos Selecionados:</span>
+                                    <span id="selectedInsumosTotal">-R$ 0,00</span>
+                                </div>
+                                <div class="summary-item total">
+                                    <span>Total Líquido a Pagar:</span>
+                                    <span id="netTotalToPay">R$ 0,00</span>
+                                </div>
+                            </div>
+
+                            <!-- Fretes Section -->
+                            <div class="payment-section">
+                                <h3>📦 Fretes</h3>
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Data</th>
+                                                <th>Descrição</th>
+                                                <th>Valor</th>
+                                                <th>Sel.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="unpaidFreightsBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Abastecimentos Section -->
+                            <div class="payment-section">
+                                <h3>⛽ Abastecimentos</h3>
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Data</th>
+                                                <th>Descrição</th>
+                                                <th>Valor</th>
+                                                <th>Sel.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="unpaidAbastBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Outros Insumos Section -->
+                            <div class="payment-section">
+                                <h3>📋 Outros Insumos</h3>
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Data</th>
+                                                <th>Descrição</th>
+                                                <th>Valor</th>
+                                                <th>Sel.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="unpaidInsumosBody"></tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -184,11 +246,14 @@
                                     <th>Cliente</th>
                                     <th>KM</th>
                                     <th>Tons</th>
-                                    <th>Preço/km/t</th>
-                                    <th>Valor</th>
+                                    <th>Preço (Mot.)</th>
+                                    <th>Valor (Mot.)</th>
+                                    <th>Preço (Transp.)</th>
+                                    <th>Valor (Transp.)</th>
                                     <th>Carga</th>
                                     <th>Descarga</th>
-                                    <th>Pago</th>
+                                    <th>Recebimento</th>
+                                    <th>Status</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -239,6 +304,7 @@
                                     <th>Preço/L</th>
                                     <th>Valor</th>
                                     <th>Comprovante</th>
+                                    <th>Status</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -287,6 +353,9 @@
                                     <th>Descrição</th>
                                     <th>Preço Unitário</th>
                                     <th>Total</th>
+                                    <th>Comprovante</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
                                 </tr>
                             </thead>
                             <tbody id="outrosInsumosTableBody"></tbody>
@@ -403,8 +472,9 @@
                                         <th>Motorista</th>
                                         <th>KM</th>
                                         <th>Tons</th>
+                                        <th>Preço (Transp.)</th>
                                         <th>Valor</th>
-                                        <th>Pago</th>
+                                        <th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody id="clientFreightsBody"></tbody>

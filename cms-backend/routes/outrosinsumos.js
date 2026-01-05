@@ -1,9 +1,36 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
 const OutrosInsumo = require('../models/outrosinsumo');
 const Driver = require('../models/driver');
 const { requireAdmin, requireDriver } = require('../middleware/auth');
 const { isValidDate, isPositiveNumber } = require('../utils/validators');
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, path.join(__dirname, '../public/uploads'));
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'outros-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+        if (mimetype && extname) {
+            return cb(null, true);
+        }
+        cb(new Error('Only .png, .jpg and .jpeg files are allowed'));
+    }
+});
 
 // ============================================
 // ADMIN ROUTES - /api/admin/outrosinsumos
@@ -89,6 +116,50 @@ adminRouter.get('/:id', async (req, res) => {
     } catch (error) {
         console.error('Get outros insumo error:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * PUT /api/admin/outrosinsumos/:id
+ * Update outros insumo with optional file upload
+ */
+adminRouter.put('/:id', upload.single('comprovante'), async (req, res) => {
+    try {
+        const outrosInsumo = await OutrosInsumo.findById(req.params.id);
+        if (!outrosInsumo) {
+            return res.status(404).json({ error: 'Outros insumo not found' });
+        }
+
+        const updateData = {};
+
+        if (req.body.date !== undefined) {
+            updateData.date = req.body.date;
+        }
+        if (req.body.quantity !== undefined) {
+            updateData.quantity = parseFloat(req.body.quantity);
+        }
+        if (req.body.description !== undefined) {
+            updateData.description = req.body.description;
+        }
+        if (req.body.unit_price !== undefined) {
+            updateData.unit_price = parseFloat(req.body.unit_price);
+        }
+
+        // Calculate new total value if quantity or unit_price changed
+        const quantity = updateData.quantity !== undefined ? updateData.quantity : outrosInsumo.quantity;
+        const unit_price = updateData.unit_price !== undefined ? updateData.unit_price : outrosInsumo.unit_price;
+        updateData.total_value = quantity * unit_price;
+
+        // Handle file upload
+        if (req.file) {
+            updateData.comprovante = `/uploads/${req.file.filename}`;
+        }
+
+        const updated = await OutrosInsumo.update(req.params.id, updateData);
+        res.json(updated);
+    } catch (error) {
+        console.error('Update outros insumo error:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
     }
 });
 

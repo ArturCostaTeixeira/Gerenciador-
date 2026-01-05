@@ -156,6 +156,25 @@ const Driver = {
         if (!bcrypt.compareSync(password, driver.password)) return null;
 
         return driver;
+    },
+
+    /**
+     * Verify driver password by CPF
+     * @param {string} cpf - Driver CPF (digits only)
+     * @param {string} password - Plain text password
+     * @returns {Object|null} - Driver if password matches, null otherwise
+     */
+    async verifyPasswordByCpf(cpf, password) {
+        const driver = await this.findByCpf(cpf);
+        if (!driver) return null;
+
+        // If driver has no password set, deny login
+        if (!driver.password) return null;
+
+        // Verify password
+        if (!bcrypt.compareSync(password, driver.password)) return null;
+
+        return driver;
     }
 };
 

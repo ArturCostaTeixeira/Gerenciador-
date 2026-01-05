@@ -7,6 +7,7 @@ const API_BASE = '/api';
 // State
 let token = localStorage.getItem('admin_token');
 let drivers = [];
+let abastecedores = []; // Fuel attendants
 let clients = [];
 let allFreights = [];
 let allAbastecimentos = [];
@@ -46,6 +47,16 @@ function formatDate(dateString) {
 
 function formatNumber(value, decimals = 0) {
     return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value || 0);
+}
+
+// Format price per liter with 4 decimal places
+function formatPricePerLiter(value) {
+    return 'R$ ' + new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(value || 0);
+}
+
+// Format price per km/ton with 6 decimal places
+function formatPricePerKmTon(value) {
+    return 'R$ ' + new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 6, maximumFractionDigits: 6 }).format(value || 0);
 }
 
 async function apiRequest(endpoint, options = {}) {
@@ -132,7 +143,7 @@ async function loadDashboard() {
         if (!verify.valid || verify.type !== 'admin') throw new Error('Invalid session');
 
         showPage(dashboardPage);
-        await Promise.all([loadDrivers(), loadClients()]);
+        await Promise.all([loadDrivers(), loadAbastecedores(), loadClients()]);
         await loadFreights();
         await loadAbastecimentos();
         await loadOutrosInsumos();
@@ -246,11 +257,27 @@ async function loadDrivers() {
     }
 }
 
+// Load abastecedores (fuel attendants)
+async function loadAbastecedores() {
+    try {
+        abastecedores = await apiRequest('/admin/abastecedores');
+        renderDriversTable();
+    } catch (error) {
+        console.error('Load abastecedores error:', error);
+    }
+}
+
 function renderDriversTable(filter = '') {
     const tbody = document.getElementById('driversTableBody');
+
+    // Combine drivers and abastecedores into a unified list
+    const driversWithType = drivers.map(d => ({ ...d, userType: 'motorista' }));
+    const abastecedoresWithType = abastecedores.map(a => ({ ...a, userType: 'abastecedor' }));
+    const allUsers = [...driversWithType, ...abastecedoresWithType];
+
     const filtered = filter
-        ? drivers.filter(d => d.name?.toLowerCase().includes(filter.toLowerCase()))
-        : drivers;
+        ? allUsers.filter(u => u.name?.toLowerCase().includes(filter.toLowerCase()))
+        : allUsers;
 
     // Helper function to format CPF
     const formatCPF = (cpf) => {
@@ -273,25 +300,36 @@ function renderDriversTable(filter = '') {
     };
 
     tbody.innerHTML = filtered.length === 0
-        ? '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">Nenhum motorista encontrado</td></tr>'
-        : filtered.map(d => {
-            // Find unpaid total for this driver
-            const unpaidEntry = unpaidTotals.find(u => u.driver_id === d.id);
+        ? '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">Nenhum usuário encontrado</td></tr>'
+        : filtered.map(u => {
+            const isMotorista = u.userType === 'motorista';
+
+            // Find unpaid total for drivers only
+            const unpaidEntry = isMotorista ? unpaidTotals.find(ut => ut.driver_id === u.id) : null;
             const unpaidAmount = unpaidEntry ? unpaidEntry.unpaid_total : 0;
             const unpaidClass = unpaidAmount > 0 ? 'value-negative' : 'text-muted';
 
+            // Type badge
+            const typeBadge = isMotorista
+                ? '<span class="status-badge" style="background:rgba(99,102,241,0.2);color:#6366f1;">Motorista</span>'
+                : '<span class="status-badge" style="background:rgba(245,158,11,0.2);color:#f59e0b;">Abastecedor</span>';
+
+            // Actions based on user type
+            const actions = isMotorista
+                ? `<button class="btn btn-sm btn-primary" onclick="openDriverPayments(${u.id})">💰 Pagamentos</button>
+                   <button class="btn btn-sm btn-outline" onclick="editDriver(${u.id})">Editar</button>`
+                : `<button class="btn btn-sm btn-outline" onclick="editAbastecedor(${u.id})">Editar</button>`;
+
             return `
             <tr>
-                <td>${d.name}</td>
-                <td>${formatCPF(d.cpf)}</td>
-                <td>${formatPhone(d.phone)}</td>
-                <td>${d.plate}</td>
-                <td class="${unpaidClass}">${unpaidAmount > 0 ? formatCurrency(unpaidAmount) : '-'}</td>
-                <td><span class="${d.active ? 'status-active' : 'status-inactive'}">${d.active ? 'Ativo' : 'Inativo'}</span></td>
-                <td>
-                    <button class="btn btn-sm btn-primary" onclick="openDriverPayments(${d.id})">💰 Pagamentos</button>
-                    <button class="btn btn-sm btn-outline" onclick="editDriver(${d.id})">Editar</button>
-                </td>
+                <td>${typeBadge}</td>
+                <td>${u.name}</td>
+                <td>${formatCPF(u.cpf)}</td>
+                <td>${formatPhone(u.phone)}</td>
+                <td>${u.plate || '-'}</td>
+                <td class="${unpaidClass}">${isMotorista && unpaidAmount > 0 ? formatCurrency(unpaidAmount) : '-'}</td>
+                <td><span class="${u.active ? 'status-active' : 'status-inactive'}">${u.active ? 'Ativo' : 'Inativo'}</span></td>
+                <td>${actions}</td>
             </tr>
         `}).join('');
 }
@@ -364,37 +402,201 @@ window.editDriver = async function (id) {
 };
 
 function showAddDriverModal() {
-    const clientOptions = '<option value="">Selecione um cliente (Opcional)</option>' +
-        clients.map(c => `<option value="${c.client}">${c.client}</option>`).join('');
-
-    showModal('Novo Motorista', `
+    showModal('Novo Usuário', `
+        <div class="input-group">
+            <label>Tipo de Usuário</label>
+            <select id="newUserType" required onchange="toggleUserTypeFields()">
+                <option value="motorista">Motorista</option>
+                <option value="abastecedor">Abastecedor</option>
+            </select>
+        </div>
         <div class="input-group">
             <label>Nome</label>
             <input type="text" id="newDriverName" required>
         </div>
+        <div class="input-group" id="cpfField">
+            <label>CPF</label>
+            <input type="text" id="newDriverCpf" placeholder="000.000.000-00" required>
+        </div>
+        <div class="input-group" id="passwordField">
+            <label>Senha</label>
+            <input type="password" id="newDriverPassword" placeholder="Mínimo 4 caracteres" minlength="4" required>
+        </div>
+        <div class="input-group" id="phoneField">
+            <label>Telefone (Opcional)</label>
+            <input type="text" id="newDriverPhone" placeholder="(00) 00000-0000">
+        </div>
+        <div id="motoristaFields">
+            <div class="input-group">
+                <label>Placa</label>
+                <input type="text" id="newDriverPlate" placeholder="ABC-1234">
+            </div>
+        </div>
+    `, async () => {
+        const userType = document.getElementById('newUserType').value;
+
+        if (userType === 'motorista') {
+            await apiRequest('/admin/drivers', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: document.getElementById('newDriverName').value,
+                    cpf: document.getElementById('newDriverCpf').value,
+                    password: document.getElementById('newDriverPassword').value,
+                    phone: document.getElementById('newDriverPhone').value || null,
+                    plate: document.getElementById('newDriverPlate').value
+                })
+            });
+            await loadDrivers();
+        } else if (userType === 'abastecedor') {
+            await apiRequest('/admin/abastecedores', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: document.getElementById('newDriverName').value,
+                    cpf: document.getElementById('newDriverCpf').value,
+                    password: document.getElementById('newDriverPassword').value,
+                    phone: document.getElementById('newDriverPhone').value || null
+                })
+            });
+            await loadAbastecedores();
+        }
+    });
+
+    // Attach input formatters after modal is rendered
+    setTimeout(attachInputFormatters, 50);
+}
+
+
+// Toggle fields based on user type selection
+window.toggleUserTypeFields = function () {
+    const userType = document.getElementById('newUserType').value;
+    const motoristaFields = document.getElementById('motoristaFields');
+    const plateInput = document.getElementById('newDriverPlate');
+
+    if (userType === 'motorista') {
+        motoristaFields.style.display = 'block';
+        plateInput.required = true;
+    } else {
+        motoristaFields.style.display = 'none';
+        plateInput.required = false;
+    }
+};
+
+// ========================================
+// Input Formatting Functions
+// ========================================
+
+// Format CPF as 000.000.000-00
+function formatCpfInput(value) {
+    const numbers = value.replace(/\D/g, '').substring(0, 11);
+    if (numbers.length <= 3) return numbers;
+    if (numbers.length <= 6) return `${numbers.slice(0, 3)}.${numbers.slice(3)}`;
+    if (numbers.length <= 9) return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6)}`;
+    return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-${numbers.slice(9)}`;
+}
+
+// Format phone as (00) 00000-0000 or (00) 0000-0000
+function formatPhoneInput(value) {
+    const numbers = value.replace(/\D/g, '').substring(0, 11);
+    if (numbers.length <= 2) return numbers;
+    if (numbers.length <= 7) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+    if (numbers.length <= 10) return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6)}`;
+    return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7)}`;
+}
+
+// Format plate as ABC-1234 or ABC1D23
+function formatPlateInput(value) {
+    const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 7);
+    if (cleaned.length <= 3) return cleaned;
+    // Check if it's new format (ABC1D23) or old format (ABC1234)
+    if (cleaned.length >= 4) {
+        const hasLetterIn5thPosition = cleaned.length >= 5 && /[A-Z]/.test(cleaned[4]);
+        if (hasLetterIn5thPosition) {
+            // New format: ABC1D23 (no hyphen)
+            return cleaned;
+        } else {
+            // Old format: ABC-1234
+            return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+        }
+    }
+    return cleaned;
+}
+
+// Attach formatters to new user modal inputs
+function attachInputFormatters() {
+    const cpfInput = document.getElementById('newDriverCpf');
+    const phoneInput = document.getElementById('newDriverPhone');
+    const plateInput = document.getElementById('newDriverPlate');
+
+    if (cpfInput) {
+        cpfInput.addEventListener('input', (e) => {
+            e.target.value = formatCpfInput(e.target.value);
+        });
+    }
+
+    if (phoneInput) {
+        phoneInput.addEventListener('input', (e) => {
+            e.target.value = formatPhoneInput(e.target.value);
+        });
+    }
+
+    if (plateInput) {
+        plateInput.addEventListener('input', (e) => {
+            e.target.value = formatPlateInput(e.target.value);
+        });
+    }
+}
+
+// Attach formatters to edit abastecedor modal inputs
+function attachAbastecedorFormatters() {
+    const phoneInput = document.getElementById('editAbastecedorPhone');
+
+    if (phoneInput) {
+        phoneInput.addEventListener('input', (e) => {
+            e.target.value = formatPhoneInput(e.target.value);
+        });
+    }
+}
+
+// Edit abastecedor
+window.editAbastecedor = async function (id) {
+    const abastecedor = abastecedores.find(a => a.id === id);
+    if (!abastecedor) return;
+
+    // Pre-format phone for display
+    const formattedPhone = abastecedor.phone ? formatPhoneInput(abastecedor.phone) : '';
+
+    showModal('Editar Abastecedor', `
+        <input type="hidden" id="editAbastecedorId" value="${id}">
         <div class="input-group">
-            <label>Placa</label>
-            <input type="text" id="newDriverPlate" placeholder="ABC-1234" required>
+            <label>Nome</label>
+            <input type="text" id="editAbastecedorName" value="${abastecedor.name}" required>
         </div>
         <div class="input-group">
-            <label>Cliente</label>
-            <select id="newDriverClient">
-                ${clientOptions}
+            <label>Telefone</label>
+            <input type="text" id="editAbastecedorPhone" value="${formattedPhone}" placeholder="(00) 00000-0000">
+        </div>
+        <div class="input-group">
+            <label>Ativo</label>
+            <select id="editAbastecedorActive">
+                <option value="true" ${abastecedor.active ? 'selected' : ''}>Sim</option>
+                <option value="false" ${!abastecedor.active ? 'selected' : ''}>Não</option>
             </select>
         </div>
     `, async () => {
-        await apiRequest('/admin/drivers', {
-            method: 'POST',
+        await apiRequest(`/admin/abastecedores/${id}`, {
+            method: 'PUT',
             body: JSON.stringify({
-                name: document.getElementById('newDriverName').value,
-                plate: document.getElementById('newDriverPlate').value,
-                client: document.getElementById('newDriverClient').value || null
+                name: document.getElementById('editAbastecedorName').value,
+                phone: document.getElementById('editAbastecedorPhone').value || null,
+                active: document.getElementById('editAbastecedorActive').value === 'true'
             })
         });
-        await loadDrivers();
-        await loadClients();
+        await loadAbastecedores();
     });
-}
+
+    // Attach input formatters after modal is rendered
+    setTimeout(attachAbastecedorFormatters, 50);
+};
 
 // ========================================
 // Freights
@@ -444,7 +646,7 @@ function renderFreightsTable() {
     document.getElementById('freightsNextBtn').disabled = pagination.freights.page === totalPages;
 
     tbody.innerHTML = pageItems.length === 0
-        ? '<tr><td colspan="11" style="text-align:center;color:var(--text-muted)">Nenhum frete encontrado</td></tr>'
+        ? '<tr><td colspan="14" style="text-align:center;color:var(--text-muted)">Nenhum frete encontrado</td></tr>'
         : pageItems.map(f => {
             const driver = drivers.find(d => d.id === f.driver_id);
             const isPending = f.status === 'pending';
@@ -493,11 +695,24 @@ function renderFreightsTable() {
                 `;
             }
 
-            // Paid checkbox (only for complete freights with value)
+            // Recebimento cell
+            let recebimentoCell;
+            if (f.comprovante_recebimento) {
+                recebimentoCell = `<a href="${f.comprovante_recebimento}" target="_blank" class="btn btn-sm btn-outline">📷</a>`;
+            } else {
+                recebimentoCell = '<span class="text-muted">-</span>';
+            }
+
+            // Status badge (only for complete freights with value)
             const isPaid = f.paid === 1 || f.paid === true;
-            const paidCell = f.status === 'complete' && f.total_value > 0
-                ? `<input type="checkbox" class="paid-checkbox" ${isPaid ? 'checked' : ''} onchange="togglePaid(${f.id})">`
-                : '<span class="text-muted">-</span>';
+            let statusCell;
+            if (f.status === 'complete' && f.total_value > 0) {
+                statusCell = isPaid
+                    ? `<span class="status-badge status-paid" onclick="togglePaid(${f.id})" style="cursor:pointer;">Pago</span>`
+                    : `<span class="status-badge status-pending" onclick="togglePaid(${f.id})" style="cursor:pointer;">Pendente</span>`;
+            } else {
+                statusCell = '<span class="text-muted">-</span>';
+            }
 
             const actionBtn = isPending
                 ? `<button class="btn btn-sm btn-primary" onclick="editFreight(${f.id})">Completar</button>`
@@ -509,11 +724,14 @@ function renderFreightsTable() {
                     <td>${f.client || '<span class="text-muted">-</span>'}</td>
                     <td>${f.km > 0 ? formatNumber(f.km) + ' km' : '<span class="text-muted">-</span>'}</td>
                     <td>${f.tons > 0 ? formatNumber(f.tons, 2) + 'T' : '<span class="text-muted">-</span>'}</td>
-                    <td>${f.price_per_km_ton > 0 ? formatCurrency(f.price_per_km_ton) : '<span class="text-muted">-</span>'}</td>
+                    <td>${f.price_per_km_ton > 0 ? formatPricePerKmTon(f.price_per_km_ton) : '<span class="text-muted">-</span>'}</td>
                     <td class="${f.total_value > 0 ? 'value-positive' : ''}">${f.total_value > 0 ? formatCurrency(f.total_value) : '<span class="text-muted">-</span>'}</td>
+                    <td>${f.price_per_km_ton_transportadora > 0 ? formatPricePerKmTon(f.price_per_km_ton_transportadora) : '<span class="text-muted">-</span>'}</td>
+                    <td class="${f.total_value_transportadora > 0 ? 'value-positive' : ''}">${f.total_value_transportadora > 0 ? formatCurrency(f.total_value_transportadora) : '<span class="text-muted">-</span>'}</td>
                     <td>${cargaCell}</td>
                     <td>${descargaCell}</td>
-                    <td>${paidCell}</td>
+                    <td>${recebimentoCell}</td>
+                    <td>${statusCell}</td>
                     <td>${actionBtn}</td>
                 </tr>
             `;
@@ -730,7 +948,7 @@ window.editFreight = async function (id) {
         </div>
         <div class="input-group">
             <label>Data</label>
-            <input type="text" value="${formatDate(freight.date)}" disabled>
+            <input type="date" id="editFreightDate" value="${freight.date}" required>
         </div>
         <div class="input-group">
             <label>Cliente</label>
@@ -745,8 +963,12 @@ window.editFreight = async function (id) {
             <input type="number" step="0.01" id="editFreightTons" value="${freight.tons || ''}" required>
         </div>
         <div class="input-group">
-            <label>Preço por km/ton</label>
-            <input type="number" step="0.01" id="editFreightPrice" value="${freight.price_per_km_ton || ''}" required>
+            <label>Preço por km/ton (R$) (Motorista)</label>
+            <input type="number" step="0.000001" id="editFreightPrice" value="${freight.price_per_km_ton ? freight.price_per_km_ton.toFixed(6) : ''}" required>
+        </div>
+        <div class="input-group">
+            <label>Preço por km/ton (R$) (Transportadora)</label>
+            <input type="number" step="0.000001" id="editFreightPriceTransportadora" value="${freight.price_per_km_ton_transportadora ? freight.price_per_km_ton_transportadora.toFixed(6) : ''}">
         </div>
         <div class="input-group">
             <label>Comprovante de Carga ${freight.comprovante_carga ? '(já anexado - enviar novo substitui)' : ''}</label>
@@ -758,18 +980,29 @@ window.editFreight = async function (id) {
             <input type="file" id="editFreightDescarga" class="file-input" accept="image/png, image/jpeg">
             ${freight.comprovante_descarga ? `<a href="${freight.comprovante_descarga}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📷 Ver atual</a>` : ''}
         </div>
+        <div class="input-group">
+            <label>Comprovante de Recebimento ${freight.comprovante_recebimento ? '(já anexado - enviar novo substitui)' : ''}</label>
+            <input type="file" id="editFreightRecebimento" class="file-input" accept="image/png, image/jpeg">
+            ${freight.comprovante_recebimento ? `<a href="${freight.comprovante_recebimento}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📷 Ver atual</a>` : ''}
+        </div>
     `, async () => {
         const formData = new FormData();
+        formData.append('date', document.getElementById('editFreightDate').value);
         formData.append('client', document.getElementById('editFreightClient').value);
         formData.append('km', parseFloat(document.getElementById('editFreightKm').value));
         formData.append('tons', parseFloat(document.getElementById('editFreightTons').value));
         formData.append('price_per_km_ton', parseFloat(document.getElementById('editFreightPrice').value));
 
+        const priceTransp = document.getElementById('editFreightPriceTransportadora').value;
+        if (priceTransp) formData.append('price_per_km_ton_transportadora', parseFloat(priceTransp));
+
         const cargaFile = document.getElementById('editFreightCarga').files[0];
         const descargaFile = document.getElementById('editFreightDescarga').files[0];
+        const recebimentoFile = document.getElementById('editFreightRecebimento').files[0];
 
         if (cargaFile) formData.append('comprovante_carga', cargaFile);
         if (descargaFile) formData.append('comprovante_descarga', descargaFile);
+        if (recebimentoFile) formData.append('comprovante_recebimento', recebimentoFile);
 
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -819,8 +1052,12 @@ function showAddFreightModal() {
             <input type="number" step="0.01" id="newFreightTons" required>
         </div>
         <div class="input-group">
-            <label>Preço por km/ton</label>
-            <input type="number" step="0.01" id="newFreightPrice" value="0.50" required>
+            <label>Preço por km/ton (R$) (Motorista)</label>
+            <input type="number" step="0.000001" id="newFreightPrice" value="0.500000" placeholder="0.000000" required>
+        </div>
+        <div class="input-group">
+            <label>Preço por km/ton (R$) (Transportadora)</label>
+            <input type="number" step="0.000001" id="newFreightPriceTransportadora" value="0.500000" placeholder="0.000000">
         </div>
         <div class="input-group">
             <label>Comprovante de Carga (Foto)</label>
@@ -829,6 +1066,10 @@ function showAddFreightModal() {
         <div class="input-group">
             <label>Comprovante de Descarga (Foto)</label>
             <input type="file" id="newFreightComprovanteDescarga" accept=".png,.jpg,.jpeg" class="file-input">
+        </div>
+        <div class="input-group">
+            <label>Comprovante de Recebimento (Foto)</label>
+            <input type="file" id="newFreightComprovanteRecebimento" accept=".png,.jpg,.jpeg" class="file-input">
         </div>
     `, async () => {
         const formData = new FormData();
@@ -839,14 +1080,21 @@ function showAddFreightModal() {
         formData.append('tons', document.getElementById('newFreightTons').value);
         formData.append('price_per_km_ton', document.getElementById('newFreightPrice').value);
 
+        const priceTransp = document.getElementById('newFreightPriceTransportadora').value;
+        if (priceTransp) formData.append('price_per_km_ton_transportadora', priceTransp);
+
         const cargaFile = document.getElementById('newFreightComprovanteCarga').files[0];
         const descargaFile = document.getElementById('newFreightComprovanteDescarga').files[0];
+        const recebimentoFile = document.getElementById('newFreightComprovanteRecebimento').files[0];
 
         if (cargaFile) {
             formData.append('comprovante_carga', cargaFile);
         }
         if (descargaFile) {
             formData.append('comprovante_descarga', descargaFile);
+        }
+        if (recebimentoFile) {
+            formData.append('comprovante_recebimento', recebimentoFile);
         }
 
         const headers = {};
@@ -915,7 +1163,7 @@ function renderAbastecimentosTable() {
     document.getElementById('abastecimentosNextBtn').disabled = pagination.abastecimentos.page === totalPages;
 
     tbody.innerHTML = pageItems.length === 0
-        ? '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">Nenhum abastecimento encontrado</td></tr>'
+        ? '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">Nenhum abastecimento encontrado</td></tr>'
         : pageItems.map(a => {
             const driver = drivers.find(d => d.id === a.driver_id);
             const isPending = a.status === 'pending';
@@ -947,15 +1195,27 @@ function renderAbastecimentosTable() {
                 ? `<button class="btn btn-sm btn-primary" onclick="editAbastecimento(${a.id})">Completar</button>`
                 : `<button class="btn btn-sm btn-outline" onclick="editAbastecimento(${a.id})">Editar</button>`;
 
+            // Status badge for paid status
+            const isPaid = a.paid === 1 || a.paid === true;
+            let statusCell;
+            if (!isPending && a.total_value > 0) {
+                statusCell = isPaid
+                    ? `<span class="status-badge status-paid">Pago</span>`
+                    : `<span class="status-badge status-pending">Pendente</span>`;
+            } else {
+                statusCell = '<span class="text-muted">-</span>';
+            }
+
             return `
                 <tr class="${isPending ? 'row-pending' : ''}">
                     <td>${formatDate(a.date)}</td>
                     <td>${a.driver_name || driver?.name || '-'}</td>
                     <td>${a.client || driver?.client || '-'}</td>
-                    <td>${isPending ? '<span class="text-muted">-</span>' : formatNumber(a.quantity) + ' L'}</td>
-                    <td>${isPending ? '<span class="text-muted">-</span>' : formatCurrency(a.price_per_liter)}</td>
+                    <td>${isPending ? '<span class="text-muted">-</span>' : formatNumber(a.quantity, 2) + ' L'}</td>
+                    <td>${isPending ? '<span class="text-muted">-</span>' : formatPricePerLiter(a.price_per_liter)}</td>
                     <td class="${isPending ? '' : 'value-negative'}">${isPending ? '<span class="text-muted">Pendente</span>' : '-' + formatCurrency(a.total_value)}</td>
                     <td>${comprovanteCell}</td>
+                    <td>${statusCell}</td>
                     <td>${actionBtn}</td>
                 </tr>
             `;
@@ -1063,7 +1323,7 @@ window.editAbastecimento = async function (id) {
         </div>
         <div class="input-group">
             <label>Data</label>
-            <input type="text" value="${formatDate(abastecimento.date)}" disabled>
+            <input type="date" id="editAbastDate" value="${abastecimento.date}" required>
         </div>
         <div class="input-group">
             <label>Cliente (Opcional)</label>
@@ -1071,11 +1331,11 @@ window.editAbastecimento = async function (id) {
         </div>
         <div class="input-group">
             <label>Litros</label>
-            <input type="number" step="0.01" id="editAbastQuantity" value="${abastecimento.quantity || ''}" required>
+            <input type="number" step="0.01" id="editAbastQuantity" value="${abastecimento.quantity ? abastecimento.quantity.toFixed(2) : ''}" required>
         </div>
         <div class="input-group">
             <label>Preço por Litro (R$)</label>
-            <input type="number" step="0.01" id="editAbastPrice" value="${abastecimento.price_per_liter || ''}" required>
+            <input type="number" step="0.0001" id="editAbastPrice" value="${abastecimento.price_per_liter ? abastecimento.price_per_liter.toFixed(4) : ''}" required>
         </div>
         <div class="input-group">
             <label>Comprovante ${abastecimento.comprovante_abastecimento ? '(já anexado - enviar novo substitui)' : ''}</label>
@@ -1084,6 +1344,7 @@ window.editAbastecimento = async function (id) {
         </div>
     `, async () => {
         const formData = new FormData();
+        formData.append('date', document.getElementById('editAbastDate').value);
         formData.append('quantity', parseFloat(document.getElementById('editAbastQuantity').value));
         formData.append('price_per_liter', parseFloat(document.getElementById('editAbastPrice').value));
         formData.append('client', document.getElementById('editAbastClient').value);
@@ -1122,11 +1383,11 @@ function showAddAbastecimentoModal() {
         </div>
         <div class="input-group">
             <label>Litros</label>
-            <input type="number" id="newAbastQuantity" required>
+            <input type="number" step="0.01" id="newAbastQuantity" placeholder="0.00" required>
         </div>
         <div class="input-group">
-            <label>Preço por Litro</label>
-            <input type="number" step="0.01" id="newAbastPrice" value="5.50" required>
+            <label>Preço por Litro (R$)</label>
+            <input type="number" step="0.0001" id="newAbastPrice" value="5.5000" placeholder="0.0000" required>
         </div>
         <div class="input-group">
             <label>Comprovante de Abastecimento (Foto)</label>
@@ -1210,8 +1471,27 @@ function renderOutrosInsumosTable() {
     document.getElementById('outrosInsumosNextBtn').disabled = pagination.outrosInsumos.page === totalPages;
 
     tbody.innerHTML = pageItems.length === 0
-        ? '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Nenhum insumo encontrado</td></tr>'
+        ? '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">Nenhum insumo encontrado</td></tr>'
         : pageItems.map(oi => {
+            // Status badge for paid status
+            const isPaid = oi.paid === 1 || oi.paid === true;
+            let statusCell;
+            if (oi.total_value > 0) {
+                statusCell = isPaid
+                    ? `<span class="status-badge status-paid">Pago</span>`
+                    : `<span class="status-badge status-pending">Pendente</span>`;
+            } else {
+                statusCell = '<span class="text-muted">-</span>';
+            }
+
+            // Comprovante cell
+            let comprovanteCell;
+            if (oi.comprovante) {
+                comprovanteCell = `<a href="${oi.comprovante}" target="_blank" class="btn btn-sm btn-outline">📷</a>`;
+            } else {
+                comprovanteCell = '<span class="text-muted">-</span>';
+            }
+
             return `
     < tr >
                     <td>${formatDate(oi.date)}</td>
@@ -1219,6 +1499,9 @@ function renderOutrosInsumosTable() {
                     <td>${oi.description || '-'}</td>
                     <td>${formatCurrency(oi.unit_price)}</td>
                     <td class="value-negative">-${formatCurrency(oi.total_value)}</td>
+                    <td>${comprovanteCell}</td>
+                    <td>${statusCell}</td>
+                    <td><button class="btn btn-sm btn-outline" onclick="editOutrosInsumo(${oi.id})">Editar</button></td>
                 </tr >
         `;
         }).join('');
@@ -1262,6 +1545,67 @@ function showAddOutrosInsumoModal() {
         await loadClients();
     });
 }
+
+// Edit outros insumo
+window.editOutrosInsumo = async function (id) {
+    const insumo = allOutrosInsumos.find(oi => oi.id === id);
+    if (!insumo) return;
+
+    showModal('Editar Outros Insumos', `
+        <input type="hidden" id="editOutrosId" value="${id}">
+        <div class="input-group">
+            <label>Motorista</label>
+            <input type="text" value="${insumo.driver_name || '-'}" disabled>
+        </div>
+        <div class="input-group">
+            <label>Data</label>
+            <input type="date" id="editOutrosDate" value="${insumo.date}" required>
+        </div>
+        <div class="input-group">
+            <label>Quantidade</label>
+            <input type="number" step="0.01" id="editOutrosQuantity" value="${insumo.quantity}" required>
+        </div>
+        <div class="input-group">
+            <label>Descrição</label>
+            <input type="text" id="editOutrosDescription" value="${insumo.description || ''}" placeholder="Ex: Óleo, Filtro, Pneu...">
+        </div>
+        <div class="input-group">
+            <label>Preço Unitário (R$)</label>
+            <input type="number" step="0.01" id="editOutrosPrice" value="${insumo.unit_price}" required>
+        </div>
+        <div class="input-group">
+            <label>Comprovante ${insumo.comprovante ? '(já anexado - enviar novo substitui)' : ''}</label>
+            <input type="file" id="editOutrosComprovante" class="file-input" accept="image/png, image/jpeg">
+            ${insumo.comprovante ? `<a href="${insumo.comprovante}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📷 Ver atual</a>` : ''}
+        </div>
+    `, async () => {
+        const formData = new FormData();
+        formData.append('date', document.getElementById('editOutrosDate').value);
+        formData.append('quantity', parseFloat(document.getElementById('editOutrosQuantity').value));
+        formData.append('description', document.getElementById('editOutrosDescription').value);
+        formData.append('unit_price', parseFloat(document.getElementById('editOutrosPrice').value));
+
+        const comprovanteFile = document.getElementById('editOutrosComprovante').files[0];
+        if (comprovanteFile) formData.append('comprovante', comprovanteFile);
+
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${API_BASE}/admin/outrosinsumos/${id}`, {
+            method: 'PUT',
+            headers,
+            body: formData
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to update outros insumo');
+        }
+
+        await loadOutrosInsumos();
+    });
+};
+
 // ========================================
 // Clients
 // ========================================
@@ -1281,7 +1625,7 @@ function renderClientsTable() {
     // Calculate statistics for each client from freights data
     const clientStats = {};
 
-    // Get unique clients from freights
+    // Get unique clients from freights - using transportadora values for client calculations
     allFreights.filter(f => f.client && f.status === 'complete').forEach(f => {
         if (!clientStats[f.client]) {
             clientStats[f.client] = {
@@ -1294,10 +1638,12 @@ function renderClientsTable() {
         }
         clientStats[f.client].drivers.add(f.driver_id);
         clientStats[f.client].freightCount++;
+        // Use transportadora value for client calculations
+        const clientValue = f.total_value_transportadora || f.total_value || 0;
         if (f.client_paid) {
-            clientStats[f.client].receivedTotal += f.total_value || 0;
+            clientStats[f.client].receivedTotal += clientValue;
         } else {
-            clientStats[f.client].toReceiveTotal += f.total_value || 0;
+            clientStats[f.client].toReceiveTotal += clientValue;
         }
     });
 
@@ -1365,12 +1711,13 @@ window.viewClientDetails = async function (clientName) {
     try {
         const decodedName = decodeURIComponent(clientName);
 
-        // Calculate stats from local data
+        // Calculate stats from local data using transportadora values
         const clientFreights = allFreights.filter(f => f.client === decodedName && f.status === 'complete');
         const driverIds = [...new Set(clientFreights.map(f => f.driver_id))];
 
-        const receivedTotal = clientFreights.filter(f => f.client_paid).reduce((sum, f) => sum + (f.total_value || 0), 0);
-        const toReceiveTotal = clientFreights.filter(f => !f.client_paid).reduce((sum, f) => sum + (f.total_value || 0), 0);
+        // Use total_value_transportadora for client calculations
+        const receivedTotal = clientFreights.filter(f => f.client_paid).reduce((sum, f) => sum + (f.total_value_transportadora || f.total_value || 0), 0);
+        const toReceiveTotal = clientFreights.filter(f => !f.client_paid).reduce((sum, f) => sum + (f.total_value_transportadora || f.total_value || 0), 0);
 
         // Get abastecimentos and insumos for these drivers
         const clientAbast = allAbastecimentos.filter(a => driverIds.includes(a.driver_id));
@@ -1397,16 +1744,19 @@ window.viewClientDetails = async function (clientName) {
 
         document.getElementById('clientFreightsBody').innerHTML = clientFreights.map(f => {
             const isPaid = f.client_paid === 1 || f.client_paid === true;
+            const valorTransp = f.total_value_transportadora || f.total_value || 0;
+            const precoTransp = f.price_per_km_ton_transportadora || f.price_per_km_ton || 0;
             return `
             <tr>
                 <td>${formatDate(f.date)}</td>
                 <td>${f.driver_name}</td>
                 <td>${formatNumber(f.km)} km</td>
                 <td>${formatNumber(f.tons, 2)} t</td>
-                <td class="value-positive">${formatCurrency(f.total_value)}</td>
+                <td>${formatPricePerKmTon(precoTransp)}</td>
+                <td class="value-positive">${formatCurrency(valorTransp)}</td>
                 <td><input type="checkbox" class="paid-checkbox" ${isPaid ? 'checked' : ''} onchange="toggleClientPaid(${f.id})"></td>
             </tr>
-        `}).join('') || '<tr><td colspan="6" style="text-align:center">Nenhum frete</td></tr>';
+        `}).join('') || '<tr><td colspan="7" style="text-align:center">Nenhum frete</td></tr>';
 
         document.getElementById('clientAbastecimentosBody').innerHTML = clientAbast.map(a => `
             <tr>
@@ -1660,26 +2010,109 @@ async function loadDriverPaymentsData() {
 }
 
 function renderUnpaidFreights() {
-    const tbody = document.getElementById('unpaidFreightsBody');
+    // Render Fretes (positive)
+    const fretesBody = document.getElementById('unpaidFreightsBody');
     const driverFreights = allFreights.filter(f =>
         f.driver_id === currentDriverForPayment.id &&
         f.status === 'complete' &&
         !f.paid
-    ).sort((a, b) => new Date(b.date) - new Date(a.date)); // Most recent first
+    ).sort((a, b) => new Date(b.date) - new Date(a.date));
 
     if (driverFreights.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem;">Nenhum frete não pago</td></tr>';
-        return;
+        fretesBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:1rem;">Nenhum frete não pago</td></tr>';
+    } else {
+        fretesBody.innerHTML = driverFreights.map(f => `
+            <tr>
+                <td>${formatDate(f.date)}</td>
+                <td>${f.client || 'Frete'} - ${formatNumber(f.km)}km / ${formatNumber(f.tons, 2)}t</td>
+                <td class="value-positive">${formatCurrency(f.total_value)}</td>
+                <td><input type="checkbox" class="payment-check freight-check" data-id="${f.id}" data-date="${f.date}" data-value="${f.total_value}"></td>
+            </tr>
+        `).join('');
     }
 
-    tbody.innerHTML = driverFreights.map(f => `
-        <tr>
-            <td>${formatDate(f.date)}</td>
-            <td>${currentDriverForPayment.name}</td>
-            <td class="value-positive">${formatCurrency(f.total_value)}</td>
-            <td><input type="checkbox" class="payment-check" data-freight-id="${f.id}" data-date="${f.date}" data-value="${f.total_value}"></td>
-        </tr>
-    `).join('');
+    // Render Abastecimentos (negative)
+    const abastBody = document.getElementById('unpaidAbastBody');
+    const driverAbast = allAbastecimentos.filter(a =>
+        a.driver_id === currentDriverForPayment.id &&
+        a.status === 'complete' &&
+        (a.paid === 0 || a.paid === null || a.paid === undefined || !a.paid)
+    ).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    if (driverAbast.length === 0) {
+        abastBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:1rem;">Nenhum abastecimento não pago</td></tr>';
+    } else {
+        abastBody.innerHTML = driverAbast.map(a => `
+            <tr>
+                <td>${formatDate(a.date)}</td>
+                <td>${formatNumber(a.quantity)} L x ${formatCurrency(a.price_per_liter)}/L</td>
+                <td class="value-negative">-${formatCurrency(a.total_value)}</td>
+                <td><input type="checkbox" class="payment-check abast-check" data-id="${a.id}" data-date="${a.date}" data-value="${a.total_value}"></td>
+            </tr>
+        `).join('');
+    }
+
+    // Render Outros Insumos (negative)
+    const insumosBody = document.getElementById('unpaidInsumosBody');
+    const driverInsumos = allOutrosInsumos.filter(oi =>
+        oi.driver_id === currentDriverForPayment.id &&
+        (oi.paid === 0 || oi.paid === null || oi.paid === undefined || !oi.paid)
+    ).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    if (driverInsumos.length === 0) {
+        insumosBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:1rem;">Nenhum insumo não pago</td></tr>';
+    } else {
+        insumosBody.innerHTML = driverInsumos.map(oi => `
+            <tr>
+                <td>${formatDate(oi.date)}</td>
+                <td>${oi.description || 'Insumo'} x ${formatNumber(oi.quantity)}</td>
+                <td class="value-negative">-${formatCurrency(oi.total_value)}</td>
+                <td><input type="checkbox" class="payment-check insumo-check" data-id="${oi.id}" data-date="${oi.date}" data-value="${oi.total_value}"></td>
+            </tr>
+        `).join('');
+    }
+
+    // Add event listeners for live calculation
+    document.querySelectorAll('.payment-check').forEach(cb => {
+        cb.addEventListener('change', updatePaymentSummary);
+    });
+
+    // Initialize summary with zeros
+    updatePaymentSummary();
+}
+
+function updatePaymentSummary() {
+    let freightsTotal = 0;
+    let abastTotal = 0;
+    let insumosTotal = 0;
+
+    // Calculate selected freights
+    document.querySelectorAll('.freight-check:checked').forEach(cb => {
+        freightsTotal += parseFloat(cb.dataset.value);
+    });
+
+    // Calculate selected abastecimentos
+    document.querySelectorAll('.abast-check:checked').forEach(cb => {
+        abastTotal += parseFloat(cb.dataset.value);
+    });
+
+    // Calculate selected insumos
+    document.querySelectorAll('.insumo-check:checked').forEach(cb => {
+        insumosTotal += parseFloat(cb.dataset.value);
+    });
+
+    // Net total = Fretes - Abastecimentos - Insumos
+    const netTotal = freightsTotal - abastTotal - insumosTotal;
+
+    // Update UI
+    document.getElementById('selectedFreightsTotal').textContent = formatCurrency(freightsTotal);
+    document.getElementById('selectedAbastTotal').textContent = `-${formatCurrency(abastTotal)}`;
+    document.getElementById('selectedInsumosTotal').textContent = `-${formatCurrency(insumosTotal)}`;
+    document.getElementById('netTotalToPay').textContent = formatCurrency(netTotal);
+
+    // Color the net total based on positive/negative
+    const netEl = document.getElementById('netTotalToPay');
+    netEl.className = netTotal >= 0 ? 'value-positive' : 'value-negative';
 }
 
 function renderPaymentsHistory() {
@@ -1739,23 +2172,43 @@ function calculateDateRange(dates) {
 }
 
 window.generatePayment = async function () {
-    const checkboxes = document.querySelectorAll('.payment-check:checked');
+    const freightCheckboxes = document.querySelectorAll('.freight-check:checked');
+    const abastCheckboxes = document.querySelectorAll('.abast-check:checked');
+    const insumoCheckboxes = document.querySelectorAll('.insumo-check:checked');
 
-    if (checkboxes.length === 0) {
-        alert('Selecione pelo menos um frete para gerar o pagamento.');
+    if (freightCheckboxes.length === 0 && abastCheckboxes.length === 0 && insumoCheckboxes.length === 0) {
+        alert('Selecione pelo menos um item para gerar o pagamento.');
         return;
     }
 
     const freightIds = [];
+    const abastecimentoIds = [];
+    const outrosInsumoIds = [];
     const dates = [];
-    let totalValue = 0;
+    let freightsTotal = 0;
+    let abastTotal = 0;
+    let insumosTotal = 0;
 
-    checkboxes.forEach(cb => {
-        freightIds.push(parseInt(cb.dataset.freightId));
+    freightCheckboxes.forEach(cb => {
+        freightIds.push(parseInt(cb.dataset.id));
         dates.push(cb.dataset.date);
-        totalValue += parseFloat(cb.dataset.value);
+        freightsTotal += parseFloat(cb.dataset.value);
     });
 
+    abastCheckboxes.forEach(cb => {
+        abastecimentoIds.push(parseInt(cb.dataset.id));
+        dates.push(cb.dataset.date);
+        abastTotal += parseFloat(cb.dataset.value);
+    });
+
+    insumoCheckboxes.forEach(cb => {
+        outrosInsumoIds.push(parseInt(cb.dataset.id));
+        dates.push(cb.dataset.date);
+        insumosTotal += parseFloat(cb.dataset.value);
+    });
+
+    // Net total = Fretes - Abastecimentos - Insumos
+    const netTotal = freightsTotal - abastTotal - insumosTotal;
     const dateRange = calculateDateRange(dates);
 
     // Show modal to optionally attach comprovante
@@ -1766,8 +2219,20 @@ window.generatePayment = async function () {
                 <input type="text" value="${dateRange}" disabled>
             </div>
             <div class="input-group">
-                <label>Valor Total</label>
-                <input type="text" value="${formatCurrency(totalValue)}" disabled>
+                <label>Fretes (+)</label>
+                <input type="text" value="${formatCurrency(freightsTotal)}" disabled style="color: var(--success);">
+            </div>
+            <div class="input-group">
+                <label>Abastecimentos (-)</label>
+                <input type="text" value="-${formatCurrency(abastTotal)}" disabled style="color: var(--error);">
+            </div>
+            <div class="input-group">
+                <label>Outros Insumos (-)</label>
+                <input type="text" value="-${formatCurrency(insumosTotal)}" disabled style="color: var(--error);">
+            </div>
+            <div class="input-group">
+                <label><strong>Total Líquido a Pagar</strong></label>
+                <input type="text" value="${formatCurrency(netTotal)}" disabled style="font-weight: bold; color: var(--accent-primary);">
             </div>
             <div class="input-group">
                 <label>Comprovante de Pagamento (Opcional)</label>
@@ -1778,8 +2243,10 @@ window.generatePayment = async function () {
         const formData = new FormData();
         formData.append('driver_id', currentDriverForPayment.id);
         formData.append('date_range', dateRange);
-        formData.append('total_value', totalValue);
+        formData.append('total_value', netTotal);
         formData.append('freight_ids', JSON.stringify(freightIds));
+        formData.append('abastecimento_ids', JSON.stringify(abastecimentoIds));
+        formData.append('outros_insumo_ids', JSON.stringify(outrosInsumoIds));
 
         const comprovanteFile = document.getElementById('paymentComprovante').files[0];
         if (comprovanteFile) {
@@ -1802,6 +2269,8 @@ window.generatePayment = async function () {
 
         // Reload all data
         await loadFreights();
+        await loadAbastecimentos();
+        await loadOutrosInsumos();
         await loadUnpaidTotals();
         await loadDriverPaymentsData();
     });

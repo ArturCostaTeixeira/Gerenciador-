@@ -89,7 +89,10 @@ async function initDatabase() {
             client TEXT,
             comprovante_carga TEXT,
             comprovante_descarga TEXT,
+            comprovante_recebimento TEXT,
             price_per_km_ton REAL,
+            price_per_km_ton_transportadora REAL,
+            total_value_transportadora REAL,
             status TEXT DEFAULT 'complete',
             paid INTEGER DEFAULT 0,
             client_paid INTEGER DEFAULT 0,
@@ -106,8 +109,10 @@ async function initDatabase() {
             quantity REAL NOT NULL,
             price_per_liter REAL NOT NULL,
             total_value REAL NOT NULL,
+            client TEXT,
             comprovante_abastecimento TEXT,
             status TEXT DEFAULT 'complete',
+            paid INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (driver_id) REFERENCES drivers(id)
         )
@@ -139,6 +144,8 @@ async function initDatabase() {
             description TEXT,
             unit_price REAL NOT NULL,
             total_value REAL NOT NULL,
+            comprovante TEXT,
+            paid INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (driver_id) REFERENCES drivers(id)
         )
@@ -191,10 +198,93 @@ async function initDatabase() {
             total_value REAL NOT NULL,
             comprovante_path TEXT,
             freight_ids TEXT NOT NULL,
+            abastecimento_ids TEXT,
+            outros_insumo_ids TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (driver_id) REFERENCES drivers(id)
         )
     `);
+
+    await exec(`
+        CREATE TABLE IF NOT EXISTS abastecedores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            cpf TEXT NOT NULL UNIQUE,
+            password TEXT,
+            phone TEXT,
+            active INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    // Add paid column to abastecimentos if it doesn't exist
+    try {
+        await exec(`ALTER TABLE abastecimentos ADD COLUMN paid INTEGER DEFAULT 0`);
+        console.log('Added paid column to abastecimentos');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    // Add client column to abastecimentos if it doesn't exist
+    try {
+        await exec(`ALTER TABLE abastecimentos ADD COLUMN client TEXT`);
+        console.log('Added client column to abastecimentos');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    // Add paid column to outros_insumos if it doesn't exist
+    try {
+        await exec(`ALTER TABLE outros_insumos ADD COLUMN paid INTEGER DEFAULT 0`);
+        console.log('Added paid column to outros_insumos');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    // Add comprovante column to outros_insumos if it doesn't exist
+    try {
+        await exec(`ALTER TABLE outros_insumos ADD COLUMN comprovante TEXT`);
+        console.log('Added comprovante column to outros_insumos');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    // Add transportadora fields to freights if they don't exist
+    try {
+        await exec(`ALTER TABLE freights ADD COLUMN price_per_km_ton_transportadora REAL`);
+        console.log('Added price_per_km_ton_transportadora column to freights');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    try {
+        await exec(`ALTER TABLE freights ADD COLUMN total_value_transportadora REAL`);
+        console.log('Added total_value_transportadora column to freights');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    try {
+        await exec(`ALTER TABLE freights ADD COLUMN comprovante_recebimento TEXT`);
+        console.log('Added comprovante_recebimento column to freights');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    // Add abastecimento_ids and outros_insumo_ids to payments if they don't exist
+    try {
+        await exec(`ALTER TABLE payments ADD COLUMN abastecimento_ids TEXT`);
+        console.log('Added abastecimento_ids column to payments');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    try {
+        await exec(`ALTER TABLE payments ADD COLUMN outros_insumo_ids TEXT`);
+        console.log('Added outros_insumo_ids column to payments');
+    } catch (e) {
+        // Column already exists, ignore
+    }
 
     // Create default admin if not exists
     const adminExists = await queryOne('SELECT id FROM admins WHERE username = ?', ['admin']);

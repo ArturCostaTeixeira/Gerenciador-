@@ -8,7 +8,7 @@ const Freight = {
      * @returns {Object} - Created freight with calculated total_value
      */
     async create(data) {
-        const { driver_id, date, km, tons, price_per_km_ton, client, comprovante_carga, comprovante_descarga } = data;
+        const { driver_id, date, km, tons, price_per_km_ton, price_per_km_ton_transportadora, client, comprovante_carga, comprovante_descarga, comprovante_recebimento } = data;
 
         // Verify driver exists
         const driver = await Driver.findById(driver_id);
@@ -16,22 +16,28 @@ const Freight = {
             throw new Error('Driver not found');
         }
 
-        // Calculate total value: km * tons * price_per_km_ton
+        // Calculate total value for driver: km * tons * price_per_km_ton
         const total_value = (km || 0) * (tons || 0) * (price_per_km_ton || 0);
 
+        // Calculate total value for transportadora: km * tons * price_per_km_ton_transportadora
+        const total_value_transportadora = (km || 0) * (tons || 0) * (price_per_km_ton_transportadora || 0);
+
         const result = await execute(`
-            INSERT INTO freights (driver_id, date, km, tons, price_per_km_ton, total_value, client, comprovante_carga, comprovante_descarga, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'complete')
+            INSERT INTO freights (driver_id, date, km, tons, price_per_km_ton, price_per_km_ton_transportadora, total_value, total_value_transportadora, client, comprovante_carga, comprovante_descarga, comprovante_recebimento, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'complete')
         `, [
             driver_id,
             date,
             km || 0,
             tons || 0,
             price_per_km_ton || 0,
+            price_per_km_ton_transportadora || 0,
             total_value,
+            total_value_transportadora,
             client || null,
             comprovante_carga || null,
-            comprovante_descarga || null
+            comprovante_descarga || null,
+            comprovante_recebimento || null
         ]);
         return this.findById(result.lastInsertRowid);
     },
@@ -64,11 +70,15 @@ const Freight = {
      * @returns {Object|null} - Updated freight
      */
     async update(id, data) {
-        const { client, km, tons, price_per_km_ton, comprovante_carga, comprovante_descarga, status, paid } = data;
+        const { date, client, km, tons, price_per_km_ton, price_per_km_ton_transportadora, comprovante_carga, comprovante_descarga, comprovante_recebimento, status, paid } = data;
 
         const updates = [];
         const values = [];
 
+        if (date !== undefined) {
+            updates.push('date = ?');
+            values.push(date);
+        }
         if (client !== undefined) {
             updates.push('client = ?');
             values.push(client);
@@ -85,6 +95,10 @@ const Freight = {
             updates.push('price_per_km_ton = ?');
             values.push(price_per_km_ton);
         }
+        if (price_per_km_ton_transportadora !== undefined) {
+            updates.push('price_per_km_ton_transportadora = ?');
+            values.push(price_per_km_ton_transportadora);
+        }
         if (comprovante_carga !== undefined) {
             updates.push('comprovante_carga = ?');
             values.push(comprovante_carga);
@@ -92,6 +106,10 @@ const Freight = {
         if (comprovante_descarga !== undefined) {
             updates.push('comprovante_descarga = ?');
             values.push(comprovante_descarga);
+        }
+        if (comprovante_recebimento !== undefined) {
+            updates.push('comprovante_recebimento = ?');
+            values.push(comprovante_recebimento);
         }
         if (status !== undefined) {
             updates.push('status = ?');
@@ -107,14 +125,20 @@ const Freight = {
         }
 
         // Recalculate total_value if km, tons, or price changed
-        if (km !== undefined || tons !== undefined || price_per_km_ton !== undefined) {
+        if (km !== undefined || tons !== undefined || price_per_km_ton !== undefined || price_per_km_ton_transportadora !== undefined) {
             const freight = await this.findById(id);
             const newKm = km !== undefined ? km : freight.km;
             const newTons = tons !== undefined ? tons : freight.tons;
             const newPrice = price_per_km_ton !== undefined ? price_per_km_ton : freight.price_per_km_ton;
+            const newPriceTransp = price_per_km_ton_transportadora !== undefined ? price_per_km_ton_transportadora : freight.price_per_km_ton_transportadora;
+
             const total_value = newKm * newTons * (newPrice || 0);
             updates.push('total_value = ?');
             values.push(total_value);
+
+            const total_value_transportadora = newKm * newTons * (newPriceTransp || 0);
+            updates.push('total_value_transportadora = ?');
+            values.push(total_value_transportadora);
         }
 
         if (updates.length === 0) return this.findById(id);

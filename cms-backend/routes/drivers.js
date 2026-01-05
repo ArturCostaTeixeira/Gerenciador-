@@ -13,24 +13,18 @@ router.use(requireAdmin);
  */
 router.post('/', async (req, res) => {
     try {
-        const { name, plate, price_per_km_ton, client } = req.body;
+        const { name, plate, cpf, password, phone, client } = req.body;
 
         // Validate input
-        if (!name || !plate || price_per_km_ton === undefined) {
+        if (!name || !plate || !cpf || !password) {
             return res.status(400).json({
-                error: 'Name, plate, and price_per_km_ton are required'
+                error: 'Nome, placa, CPF e senha são obrigatórios'
             });
         }
 
         if (!isValidPlate(plate)) {
             return res.status(400).json({
-                error: 'Invalid plate format. Use ABC-1234 or ABC-1D23'
-            });
-        }
-
-        if (!isPositiveNumber(price_per_km_ton)) {
-            return res.status(400).json({
-                error: 'price_per_km_ton must be a positive number'
+                error: 'Formato de placa inválido. Use ABC-1234 ou ABC1D23'
             });
         }
 
@@ -38,22 +32,34 @@ router.post('/', async (req, res) => {
         const normalizedPlate = normalizePlate(plate);
         const existing = await Driver.findByPlate(normalizedPlate);
         if (existing) {
-            return res.status(409).json({ error: 'Plate already registered' });
+            return res.status(409).json({ error: 'Placa já cadastrada' });
+        }
+
+        // Check if CPF already exists
+        const cpfClean = cpf.replace(/\D/g, '');
+        const existingCpf = await Driver.findByCpf(cpfClean);
+        if (existingCpf) {
+            return res.status(409).json({ error: 'CPF já cadastrado' });
         }
 
         const driver = await Driver.create({
             name: name.trim(),
             plate: normalizedPlate,
-            price_per_km_ton,
+            cpf: cpfClean,
+            password,
+            phone: phone ? phone.replace(/\D/g, '') : null,
             client: client ? client.trim() : null
         });
 
-        res.status(201).json(driver);
+        // Remove password from response
+        const { password: _, ...safeDriver } = driver;
+        res.status(201).json(safeDriver);
     } catch (error) {
         console.error('Create driver error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+
 
 /**
  * GET /api/admin/drivers

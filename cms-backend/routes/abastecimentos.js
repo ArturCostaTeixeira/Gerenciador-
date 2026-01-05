@@ -1,31 +1,14 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
-const router = express.Router();
 const Abastecimento = require('../models/abastecimento');
 const Driver = require('../models/driver');
 const { requireAdmin, requireDriver } = require('../middleware/auth');
 const { isValidDate, isPositiveNumber } = require('../utils/validators');
+const { uploadToBlob } = require('../utils/blobStorage');
 
-// Configure multer for file uploads
-const uploadsDir = path.join(__dirname, '..', 'public', 'uploads', 'comprovantes');
-
-// Ensure uploads directory exists
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadsDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname).toLowerCase();
-        cb(null, `abastecimento-${uniqueSuffix}${ext}`);
-    }
-});
+// Configure multer with memory storage for Vercel Blob
+const memoryStorage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png/;
@@ -39,7 +22,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({
-    storage,
+    storage: memoryStorage,
     fileFilter,
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
@@ -85,10 +68,15 @@ adminRouter.post('/', upload.single('comprovante_abastecimento'), async (req, re
             return res.status(404).json({ error: 'Driver not found' });
         }
 
-        // Get file path
+        // Handle file upload with Vercel Blob
         let comprovante_abastecimento = null;
         if (req.file) {
-            comprovante_abastecimento = '/uploads/comprovantes/' + req.file.filename;
+            const file = req.file;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+            const filename = `abastecimento-${uniqueSuffix}${ext}`;
+            const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+            comprovante_abastecimento = url;
         }
 
         const abastecimento = await Abastecimento.create({
@@ -174,16 +162,22 @@ adminRouter.put('/:id', upload.single('comprovante_abastecimento'), async (req, 
             return res.status(404).json({ error: 'Abastecimento not found' });
         }
 
-        const { quantity, price_per_liter, client } = req.body;
+        const { date, quantity, price_per_liter, client } = req.body;
         const updateData = {};
 
+        if (date !== undefined) updateData.date = date;
         if (quantity !== undefined) updateData.quantity = parseFloat(quantity);
         if (price_per_liter !== undefined) updateData.price_per_liter = parseFloat(price_per_liter);
         if (client !== undefined) updateData.client = client;
 
-        // Handle file upload
+        // Handle file upload with Vercel Blob
         if (req.file) {
-            updateData.comprovante_abastecimento = '/uploads/comprovantes/' + req.file.filename;
+            const file = req.file;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+            const filename = `abastecimento-${uniqueSuffix}${ext}`;
+            const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+            updateData.comprovante_abastecimento = url;
         }
 
         // If completing a pending abastecimento, set status to complete

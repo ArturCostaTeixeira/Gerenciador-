@@ -187,11 +187,16 @@ function toggleForms(showSignup) {
 async function handleLogin(e) {
     e.preventDefault();
     const button = loginFormElement.querySelector('button');
-    const plate = document.getElementById('loginPlate').value.trim().toUpperCase();
+    const cpf = document.getElementById('loginCpf').value.trim().replace(/\D/g, '');
     const password = document.getElementById('loginPassword').value;
 
-    if (!plate || !password) {
+    if (!cpf || !password) {
         showError('Preencha todos os campos');
+        return;
+    }
+
+    if (cpf.length !== 11) {
+        showError('CPF deve ter 11 dígitos');
         return;
     }
 
@@ -201,7 +206,7 @@ async function handleLogin(e) {
     try {
         const data = await apiRequest('/auth/driver/login', {
             method: 'POST',
-            body: JSON.stringify({ plate, password })
+            body: JSON.stringify({ cpf, password })
         });
 
         token = data.token;
@@ -339,11 +344,20 @@ async function loadExtratoStats() {
     try {
         const stats = await apiRequest('/driver/stats');
 
+        // Total Fretes (positive - green)
         document.getElementById('totalFretesValue').textContent = formatCurrency(stats.freights.total_value);
-        document.getElementById('totalRecebidoValue').textContent = formatCurrency(stats.total_received || 0);
+
+        // Abastecimentos (negative - red)
         document.getElementById('totalAbastecimentosValue').textContent = '-' + formatCurrency(stats.abastecimentos.total_value);
+
+        // Outros Insumos (negative - red)
         document.getElementById('totalOutrosInsumosValue').textContent = '-' + formatCurrency(stats.outrosInsumos?.total_value || 0);
+
+        // Total a Receber = Fretes - Abastecimentos - Outros Insumos - Pago
         document.getElementById('totalAReceberValue').textContent = formatCurrency(stats.total_to_receive);
+
+        // Pago (amount already received from payments)
+        document.getElementById('totalPagoValue').textContent = formatCurrency(stats.total_received || 0);
     } catch (error) {
         console.error('Stats error:', error);
     }
@@ -724,7 +738,7 @@ function init() {
     extratoLogoutBtn.addEventListener('click', logout);
 
     // Input Formatting
-    formatPlateInput(document.getElementById('loginPlate'));
+    formatCPFInput(document.getElementById('loginCpf'));
     formatPlateInput(document.getElementById('signupPlate'));
     formatCPFInput(document.getElementById('signupCpf'));
     formatPhoneInput(document.getElementById('signupPhone'));

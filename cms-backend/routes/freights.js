@@ -1,31 +1,14 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
-const router = express.Router();
 const Freight = require('../models/freight');
 const Driver = require('../models/driver');
 const { requireAdmin, requireDriver } = require('../middleware/auth');
 const { isValidDate, isPositiveNumber } = require('../utils/validators');
+const { uploadToBlob } = require('../utils/blobStorage');
 
-// Configure multer for file uploads
-const uploadsDir = path.join(__dirname, '..', 'public', 'uploads', 'comprovantes');
-
-// Ensure uploads directory exists
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadsDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname).toLowerCase();
-        cb(null, `comprovante-${uniqueSuffix}${ext}`);
-    }
-});
+// Configure multer with memory storage for Vercel Blob
+const memoryStorage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png/;
@@ -39,7 +22,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({
-    storage,
+    storage: memoryStorage,
     fileFilter,
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
@@ -56,10 +39,11 @@ adminRouter.use(requireAdmin);
  */
 adminRouter.post('/', upload.fields([
     { name: 'comprovante_carga', maxCount: 1 },
-    { name: 'comprovante_descarga', maxCount: 1 }
+    { name: 'comprovante_descarga', maxCount: 1 },
+    { name: 'comprovante_recebimento', maxCount: 1 }
 ]), async (req, res) => {
     try {
-        const { driver_id, date, km, tons, price_per_km_ton, client } = req.body;
+        const { driver_id, date, km, tons, price_per_km_ton, price_per_km_ton_transportadora, client } = req.body;
 
         // Validate input
         if (!driver_id || !date || km === undefined || tons === undefined || price_per_km_ton === undefined) {
@@ -96,16 +80,35 @@ adminRouter.post('/', upload.fields([
             return res.status(404).json({ error: 'Driver not found' });
         }
 
-        // Get file paths
+        // Handle file uploads with Vercel Blob
         let comprovante_carga = null;
         let comprovante_descarga = null;
+        let comprovante_recebimento = null;
 
         if (req.files) {
             if (req.files['comprovante_carga'] && req.files['comprovante_carga'][0]) {
-                comprovante_carga = '/uploads/comprovantes/' + req.files['comprovante_carga'][0].filename;
+                const file = req.files['comprovante_carga'][0];
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+                const filename = `freight-carga-${uniqueSuffix}${ext}`;
+                const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+                comprovante_carga = url;
             }
             if (req.files['comprovante_descarga'] && req.files['comprovante_descarga'][0]) {
-                comprovante_descarga = '/uploads/comprovantes/' + req.files['comprovante_descarga'][0].filename;
+                const file = req.files['comprovante_descarga'][0];
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+                const filename = `freight-descarga-${uniqueSuffix}${ext}`;
+                const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+                comprovante_descarga = url;
+            }
+            if (req.files['comprovante_recebimento'] && req.files['comprovante_recebimento'][0]) {
+                const file = req.files['comprovante_recebimento'][0];
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+                const filename = `freight-recebimento-${uniqueSuffix}${ext}`;
+                const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+                comprovante_recebimento = url;
             }
         }
 
@@ -115,9 +118,11 @@ adminRouter.post('/', upload.fields([
             km: parseFloat(km),
             tons: parseFloat(tons),
             price_per_km_ton: parseFloat(price_per_km_ton),
+            price_per_km_ton_transportadora: price_per_km_ton_transportadora ? parseFloat(price_per_km_ton_transportadora) : null,
             client: client ? client.trim() : null,
             comprovante_carga,
-            comprovante_descarga
+            comprovante_descarga,
+            comprovante_recebimento
         });
         res.status(201).json(freight);
     } catch (error) {
@@ -132,7 +137,8 @@ adminRouter.post('/', upload.fields([
  */
 adminRouter.put('/:id', upload.fields([
     { name: 'comprovante_carga', maxCount: 1 },
-    { name: 'comprovante_descarga', maxCount: 1 }
+    { name: 'comprovante_descarga', maxCount: 1 },
+    { name: 'comprovante_recebimento', maxCount: 1 }
 ]), async (req, res) => {
     try {
         const freightId = parseInt(req.params.id);
@@ -142,22 +148,42 @@ adminRouter.put('/:id', upload.fields([
             return res.status(404).json({ error: 'Freight not found' });
         }
 
-        const { client, km, tons, price_per_km_ton, status } = req.body;
+        const { date, client, km, tons, price_per_km_ton, price_per_km_ton_transportadora, status } = req.body;
         const updateData = {};
 
+        if (date !== undefined) updateData.date = date;
         if (client !== undefined) updateData.client = client;
         if (km !== undefined) updateData.km = parseFloat(km);
         if (tons !== undefined) updateData.tons = parseFloat(tons);
         if (price_per_km_ton !== undefined) updateData.price_per_km_ton = parseFloat(price_per_km_ton);
+        if (price_per_km_ton_transportadora !== undefined) updateData.price_per_km_ton_transportadora = parseFloat(price_per_km_ton_transportadora);
         if (status !== undefined) updateData.status = status;
 
-        // Handle file uploads
+        // Handle file uploads with Vercel Blob
         if (req.files) {
             if (req.files['comprovante_carga'] && req.files['comprovante_carga'][0]) {
-                updateData.comprovante_carga = '/uploads/comprovantes/' + req.files['comprovante_carga'][0].filename;
+                const file = req.files['comprovante_carga'][0];
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+                const filename = `freight-carga-${uniqueSuffix}${ext}`;
+                const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+                updateData.comprovante_carga = url;
             }
             if (req.files['comprovante_descarga'] && req.files['comprovante_descarga'][0]) {
-                updateData.comprovante_descarga = '/uploads/comprovantes/' + req.files['comprovante_descarga'][0].filename;
+                const file = req.files['comprovante_descarga'][0];
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+                const filename = `freight-descarga-${uniqueSuffix}${ext}`;
+                const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+                updateData.comprovante_descarga = url;
+            }
+            if (req.files['comprovante_recebimento'] && req.files['comprovante_recebimento'][0]) {
+                const file = req.files['comprovante_recebimento'][0];
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+                const filename = `freight-recebimento-${uniqueSuffix}${ext}`;
+                const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+                updateData.comprovante_recebimento = url;
             }
         }
 

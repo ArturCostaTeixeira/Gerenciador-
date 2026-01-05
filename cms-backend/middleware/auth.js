@@ -80,6 +80,24 @@ function requireDriver(req, res, next) {
 }
 
 /**
+ * Requires abastecedor authentication
+ */
+function requireAbastecedor(req, res, next) {
+    const token = extractToken(req);
+    if (!token) {
+        return res.status(401).json({ error: 'Authorization token required' });
+    }
+
+    const decoded = verifyToken(token);
+    if (!decoded || decoded.type !== 'abastecedor') {
+        return res.status(401).json({ error: 'Abastecedor authentication required' });
+    }
+
+    req.abastecedor = decoded;
+    next();
+}
+
+/**
  * Requires any authenticated user (admin or driver)
  */
 function requireAuth(req, res, next) {
@@ -102,6 +120,8 @@ module.exports = {
     verifyToken,
     requireAdmin,
     requireDriver,
+    requireAbastecedor,
     requireAuth,
     JWT_SECRET
 };
+

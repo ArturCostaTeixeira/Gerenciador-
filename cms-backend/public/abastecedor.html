@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>CMS - Portal do Abastecedor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="abastecedor-styles.css">
+</head>
+
+<body>
+    <div class="app" id="app">
+        <!-- Login Page -->
+        <div id="loginPage" class="page active">
+            <div class="auth-container">
+                <div class="auth-card glass">
+                    <div class="logo-section">
+                        <div class="logo-icon"><img src="logo_excava.png" alt="Excava Logo"
+                                style="width: 120px; height: 120px;"></div>
+                        <h1>Portal do Abastecedor</h1>
+                    </div>
+
+                    <!-- Login Form -->
+                    <div id="loginForm" class="form-section">
+                        <form id="loginFormElement">
+                            <div class="input-group">
+                                <label for="loginCpf">CPF</label>
+                                <input type="text" id="loginCpf" placeholder="000.000.000-00" required
+                                    autocomplete="off">
+                                <span class="input-hint">Digite seu CPF</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="loginPassword">Senha</label>
+                                <input type="password" id="loginPassword" placeholder="••••••••" minlength="4" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-full">
+                                <span>Entrar</span>
+                                <span class="btn-loader hidden"></span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div id="authError" class="error-message hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Page (2 Buttons) -->
+        <div id="dashboardPage" class="page hidden">
+            <!-- Header -->
+            <header class="header glass">
+                <div class="header-left">
+                    <div class="logo-icon small"><img src="logo_excava.png" alt="Logo"
+                            style="width: 40px; height: 40px;"></div>
+                    <div class="header-title">
+                        <h1>ExcavaNorth</h1>
+                        <p id="welcomeText">Bem-vindo!</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <button id="logoutBtn" class="btn btn-outline">
+                        Sair
+                    </button>
+                </div>
+            </header>
+
+            <!-- Main Actions -->
+            <main class="main-actions">
+                <div class="actions-container">
+                    <button class="action-btn glass" id="btnComprovanteAbastecimento">
+                        <span class="action-icon">⛽</span>
+                        <span class="action-text">Comprovante de<br>Abastecimento</span>
+                    </button>
+
+                    <button class="action-btn glass" id="btnOutrosInsumos">
+                        <span class="action-icon">📦</span>
+                        <span class="action-text">Comprovante para<br>Outros Insumos</span>
+                    </button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Modal for Comprovante de Abastecimento -->
+        <div id="modalAbastecimento" class="modal hidden">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content glass">
+                <div class="modal-header">
+                    <h2>⛽ Comprovante de Abastecimento</h2>
+                    <button class="modal-close" id="closeModalAbastecimento">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="formAbastecimento">
+                        <div class="input-group">
+                            <label for="abastPlaca">Placa do Veículo</label>
+                            <input type="text" id="abastPlaca" placeholder="ABC-1234" required autocomplete="off">
+                            <span class="input-hint plate-status" id="abastPlacaStatus"></span>
+                        </div>
+                        <div class="input-group">
+                            <label for="abastData">Data</label>
+                            <input type="date" id="abastData" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="abastLitros">Litros</label>
+                            <input type="number" id="abastLitros" placeholder="0.00" step="0.01" min="0" required>
+                        </div>
+
+                        <!-- Camera Section -->
+                        <div class="camera-section">
+                            <label>Foto do Comprovante</label>
+                            <div class="camera-container" id="abastCameraContainer">
+                                <video id="abastVideo" autoplay playsinline class="hidden"></video>
+                                <canvas id="abastCanvas" class="hidden"></canvas>
+                                <img id="abastPreview" class="photo-preview hidden">
+                                <div class="camera-placeholder" id="abastPlaceholder">
+                                    <span class="camera-icon">📷</span>
+                                    <span>Clique para tirar foto</span>
+                                </div>
+                            </div>
+                            <div class="camera-actions">
+                                <button type="button" class="btn btn-outline btn-sm" id="abastOpenCamera">
+                                    📸 Tirar Foto
+                                </button>
+                                <button type="button" class="btn btn-outline btn-sm hidden" id="abastCapture">
+                                    ✓ Capturar
+                                </button>
+                                <button type="button" class="btn btn-outline btn-sm hidden" id="abastRetake">
+                                    🔄 Refazer
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-full">
+                            <span>Enviar Comprovante</span>
+                            <span class="btn-loader hidden"></span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for Outros Insumos -->
+        <div id="modalOutrosInsumos" class="modal hidden">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content glass">
+                <div class="modal-header">
+                    <h2>📦 Comprovante para Outros Insumos</h2>
+                    <button class="modal-close" id="closeModalOutrosInsumos">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="formOutrosInsumos">
+                        <div class="input-group">
+                            <label for="insumoPlaca">Placa do Veículo</label>
+                            <input type="text" id="insumoPlaca" placeholder="ABC-1234" required autocomplete="off">
+                            <span class="input-hint plate-status" id="insumoPlacaStatus"></span>
+                        </div>
+                        <div class="input-group">
+                            <label for="insumoData">Data</label>
+                            <input type="date" id="insumoData" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="insumoQuantidade">Quantidade</label>
+                            <input type="number" id="insumoQuantidade" placeholder="0" step="0.01" min="0" required>
+                            <span class="input-hint">Qualquer unidade de medida</span>
+                        </div>
+                        <div class="input-group">
+                            <label for="insumoDescricao">Descrição (opcional)</label>
+                            <input type="text" id="insumoDescricao" placeholder="Ex: Óleo, Pneu, etc.">
+                        </div>
+
+                        <!-- Camera Section -->
+                        <div class="camera-section">
+                            <label>Foto do Comprovante</label>
+                            <div class="camera-container" id="insumoCameraContainer">
+                                <video id="insumoVideo" autoplay playsinline class="hidden"></video>
+                                <canvas id="insumoCanvas" class="hidden"></canvas>
+                                <img id="insumoPreview" class="photo-preview hidden">
+                                <div class="camera-placeholder" id="insumoPlaceholder">
+                                    <span class="camera-icon">📷</span>
+                                    <span>Clique para tirar foto</span>
+                                </div>
+                            </div>
+                            <div class="camera-actions">
+                                <button type="button" class="btn btn-outline btn-sm" id="insumoOpenCamera">
+                                    📸 Tirar Foto
+                                </button>
+                                <button type="button" class="btn btn-outline btn-sm hidden" id="insumoCapture">
+                                    ✓ Capturar
+                                </button>
+                                <button type="button" class="btn btn-outline btn-sm hidden" id="insumoRetake">
+                                    🔄 Refazer
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-full">
+                            <span>Enviar Comprovante</span>
+                            <span class="btn-loader hidden"></span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success/Error Toast -->
+        <div id="toast" class="toast hidden">
+            <span id="toastMessage"></span>
+        </div>
+    </div>
+
+    <script src="abastecedor-app.js"></script>
+</body>
+
+</html>

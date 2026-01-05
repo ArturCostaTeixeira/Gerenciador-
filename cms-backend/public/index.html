@@ -25,10 +25,10 @@
                     <div id="loginForm" class="form-section">
                         <form id="loginFormElement">
                             <div class="input-group">
-                                <label for="loginPlate">Placa do Veículo</label>
-                                <input type="text" id="loginPlate" placeholder="ABC-1234"
-                                    pattern="[A-Za-z]{3}-[0-9][A-Za-z0-9][0-9]{2}" required autocomplete="off">
-                                <span class="input-hint">Formato: ABC-1234 ou ABC-1D23</span>
+                                <label for="loginCpf">CPF</label>
+                                <input type="text" id="loginCpf" placeholder="000.000.000-00" required
+                                    autocomplete="off">
+                                <span class="input-hint">Formato: 000.000.000-00</span>
                             </div>
                             <div class="input-group">
                                 <label for="loginPassword">Senha</label>
@@ -155,23 +155,23 @@
                 <section class="summary-cards-row">
                     <div class="summary-card-sm glass">
                         <span class="card-label">Total Fretes</span>
-                        <span class="card-value" id="totalFretesValue">R$ 0,00</span>
-                    </div>
-                    <div class="summary-card-sm glass card-received">
-                        <span class="card-label">Total Recebido</span>
-                        <span class="card-value" id="totalRecebidoValue">R$ 0,00</span>
+                        <span class="card-value value-positive" id="totalFretesValue">R$ 0,00</span>
                     </div>
                     <div class="summary-card-sm glass card-negative">
                         <span class="card-label">Abastecimentos</span>
-                        <span class="card-value" id="totalAbastecimentosValue">R$ 0,00</span>
+                        <span class="card-value" id="totalAbastecimentosValue">-R$ 0,00</span>
                     </div>
                     <div class="summary-card-sm glass card-negative">
                         <span class="card-label">Outros Insumos</span>
-                        <span class="card-value" id="totalOutrosInsumosValue">R$ 0,00</span>
+                        <span class="card-value" id="totalOutrosInsumosValue">-R$ 0,00</span>
                     </div>
                     <div class="summary-card-sm glass highlight">
                         <span class="card-label">Total a Receber</span>
                         <span class="card-value" id="totalAReceberValue">R$ 0,00</span>
+                    </div>
+                    <div class="summary-card-sm glass card-received">
+                        <span class="card-label">Pago</span>
+                        <span class="card-value" id="totalPagoValue">R$ 0,00</span>
                     </div>
                 </section>
 
