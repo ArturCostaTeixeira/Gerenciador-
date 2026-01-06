@@ -10,15 +10,15 @@ const { sendVerificationCode, verifyCode } = require('../utils/twilioService');
 /**
  * POST /api/auth/driver/signup
  * Driver sign-up (one-time registration)
- * Creates driver with name, plate, additional_plates, password, phone, and CPF
+ * Creates driver with name, plates (optional), password, phone, and CPF
  */
 router.post('/driver/signup', async (req, res) => {
     try {
-        const { name, plate, additional_plates, password, phone, cpf } = req.body;
+        const { name, plates, password, phone, cpf } = req.body;
 
-        // Validate input
-        if (!name || !plate || !password || !phone || !cpf) {
-            return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
+        // Validate input - plates are now optional
+        if (!name || !password || !phone || !cpf) {
+            return res.status(400).json({ error: 'Nome, senha, telefone e CPF são obrigatórios' });
         }
 
         if (name.trim().length < 2) {
@@ -41,35 +41,15 @@ router.post('/driver/signup', async (req, res) => {
             return res.status(400).json({ error: 'Telefone inválido. Deve conter pelo menos 10 dígitos' });
         }
 
-        if (!isValidPlate(plate)) {
-            return res.status(400).json({ error: 'Formato de placa inválido. Use ABC-1234 ou ABC-1D23' });
-        }
-
-        const normalizedPlate = normalizePlate(plate);
-
-        // Check if primary plate already exists
-        const existingPlate = await Driver.findByPlate(normalizedPlate);
-        if (existingPlate) {
-            return res.status(409).json({ error: 'Placa já cadastrada no sistema' });
-        }
-
-        // Validate and normalize additional plates if provided
-        let normalizedAdditionalPlates = [];
-        if (additional_plates && Array.isArray(additional_plates) && additional_plates.length > 0) {
-            for (const addPlate of additional_plates) {
-                if (addPlate && addPlate.trim()) {
-                    if (!isValidPlate(addPlate)) {
-                        return res.status(400).json({ error: `Formato de placa adicional inválido: ${addPlate}` });
+        // Validate and normalize plates if provided
+        let normalizedPlates = [];
+        if (plates && Array.isArray(plates) && plates.length > 0) {
+            for (const plate of plates) {
+                if (plate && plate.trim()) {
+                    if (!isValidPlate(plate)) {
+                        return res.status(400).json({ error: `Formato de placa inválido: ${plate}. Use ABC-1234 ou ABC-1D23` });
                     }
-                    const normalizedAddPlate = normalizePlate(addPlate);
-
-                    // Check if this additional plate already exists
-                    const existingAddPlate = await Driver.findByPlate(normalizedAddPlate);
-                    if (existingAddPlate) {
-                        return res.status(409).json({ error: `Placa ${normalizedAddPlate} já cadastrada no sistema` });
-                    }
-
-                    normalizedAdditionalPlates.push(normalizedAddPlate);
+                    normalizedPlates.push(normalizePlate(plate));
                 }
             }
         }
@@ -86,11 +66,11 @@ router.post('/driver/signup', async (req, res) => {
             return res.status(409).json({ error: 'Telefone já cadastrado no sistema' });
         }
 
-        // Create driver with password, phone, CPF, and additional plates
+        // Create driver - plate can be null, plates array stores all plates
         const driver = await Driver.create({
             name: name.trim(),
-            plate: normalizedPlate,
-            plates: normalizedAdditionalPlates,
+            plate: normalizedPlates.length > 0 ? normalizedPlates[0] : null, // First plate as primary (for backward compatibility)
+            plates: normalizedPlates, // All plates stored in plates array
             price_per_km_ton: 0, // Default, admin will update
             client: null,
             password: password,

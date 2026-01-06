@@ -56,6 +56,30 @@ const Driver = {
     },
 
     /**
+     * Find ALL drivers associated with a plate (primary or additional)
+     * @param {string} plate - Plate to search for
+     * @returns {Array} - Array of drivers
+     */
+    async findAllByPlate(plate) {
+        const normalizedPlate = plate.toUpperCase();
+
+        // Find drivers where:
+        // 1. Primary plate matches
+        // 2. OR the plate is in the plates JSON array
+        const drivers = await query(`
+            SELECT * FROM drivers 
+            WHERE active = 1 
+            AND authenticated = 1
+            AND (
+                UPPER(plate) = ? 
+                OR plates LIKE ?
+            )
+        `, [normalizedPlate, `%"${normalizedPlate}"%`]);
+
+        return drivers;
+    },
+
+    /**
      * Find driver by CPF
      * @param {string} cpf - Driver CPF
      * @returns {Object|null} - Driver or null

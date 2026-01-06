@@ -11,20 +11,24 @@ const { uploadToBlob } = require('../utils/blobStorage');
 const memoryStorage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+    // Allow images for comprovantes
+    const imageTypes = /jpeg|jpg|png/;
+    const isImage = imageTypes.test(path.extname(file.originalname).toLowerCase()) && imageTypes.test(file.mimetype);
 
-    if (extname && mimetype) {
+    // Allow PDF for documento_frete
+    const isPdf = file.fieldname === 'documento_frete' &&
+        (path.extname(file.originalname).toLowerCase() === '.pdf' || file.mimetype === 'application/pdf');
+
+    if (isImage || isPdf) {
         return cb(null, true);
     }
-    cb(new Error('Only .png and .jpg files are allowed!'));
+    cb(new Error('Only .png, .jpg, and .pdf files are allowed!'));
 };
 
 const upload = multer({
     storage: memoryStorage,
     fileFilter,
-    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+    limits: { fileSize: 15 * 1024 * 1024 } // 15MB limit for PDFs
 });
 
 // ============================================
@@ -138,7 +142,8 @@ adminRouter.post('/', upload.fields([
 adminRouter.put('/:id', upload.fields([
     { name: 'comprovante_carga', maxCount: 1 },
     { name: 'comprovante_descarga', maxCount: 1 },
-    { name: 'comprovante_recebimento', maxCount: 1 }
+    { name: 'comprovante_recebimento', maxCount: 1 },
+    { name: 'documento_frete', maxCount: 1 }
 ]), async (req, res) => {
     try {
         const freightId = parseInt(req.params.id);
@@ -148,9 +153,10 @@ adminRouter.put('/:id', upload.fields([
             return res.status(404).json({ error: 'Freight not found' });
         }
 
-        const { date, client, km, tons, price_per_km_ton, price_per_km_ton_transportadora, status, plate } = req.body;
+        const { driver_id, date, client, km, tons, price_per_km_ton, price_per_km_ton_transportadora, status, plate } = req.body;
         const updateData = {};
 
+        if (driver_id !== undefined) updateData.driver_id = parseInt(driver_id);
         if (date !== undefined) updateData.date = date;
         if (client !== undefined) updateData.client = client;
         if (plate !== undefined) updateData.plate = plate;
@@ -185,6 +191,14 @@ adminRouter.put('/:id', upload.fields([
                 const filename = `freight-recebimento-${uniqueSuffix}${ext}`;
                 const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
                 updateData.comprovante_recebimento = url;
+            }
+            if (req.files['documento_frete'] && req.files['documento_frete'][0]) {
+                const file = req.files['documento_frete'][0];
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                const ext = path.extname(file.originalname).toLowerCase() || '.pdf';
+                const filename = `freight-documento-${uniqueSuffix}${ext}`;
+                const { url } = await uploadToBlob(file.buffer, filename, file.mimetype);
+                updateData.documento_frete = url;
             }
         }
 

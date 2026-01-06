@@ -70,11 +70,19 @@ const Freight = {
      * @returns {Object|null} - Updated freight
      */
     async update(id, data) {
-        const { date, client, km, tons, price_per_km_ton, price_per_km_ton_transportadora, comprovante_carga, comprovante_descarga, comprovante_recebimento, status, paid } = data;
+        const { driver_id, plate, date, client, km, tons, price_per_km_ton, price_per_km_ton_transportadora, comprovante_carga, comprovante_descarga, comprovante_recebimento, documento_frete, status, paid } = data;
 
         const updates = [];
         const values = [];
 
+        if (driver_id !== undefined) {
+            updates.push('driver_id = ?');
+            values.push(driver_id);
+        }
+        if (plate !== undefined) {
+            updates.push('plate = ?');
+            values.push(plate);
+        }
         if (date !== undefined) {
             updates.push('date = ?');
             values.push(date);
@@ -110,6 +118,10 @@ const Freight = {
         if (comprovante_recebimento !== undefined) {
             updates.push('comprovante_recebimento = ?');
             values.push(comprovante_recebimento);
+        }
+        if (documento_frete !== undefined) {
+            updates.push('documento_frete = ?');
+            values.push(documento_frete);
         }
         if (status !== undefined) {
             updates.push('status = ?');

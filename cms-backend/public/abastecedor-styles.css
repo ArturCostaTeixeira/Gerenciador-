@@ -194,12 +194,82 @@ body {
     color: var(--text-muted);
 }
 
+/* Password Toggle */
+.password-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-wrapper input {
+    flex: 1;
+    padding-right: 3rem;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--transition-fast);
+    font-size: 1.1rem;
+}
+
+.password-toggle:hover {
+    color: var(--text-primary);
+}
+
+.password-toggle .eye-icon {
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.password-toggle .eye-icon img {
+    width: 20px;
+    height: 20px;
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+}
+
+.password-toggle:hover .eye-icon img {
+    opacity: 0.8;
+}
+
+.password-toggle.active .eye-icon img {
+    opacity: 1;
+}
+
 .plate-status.valid {
     color: var(--success);
 }
 
+.plate-status.warning {
+    color: var(--warning);
+    font-weight: 500;
+}
+
 .plate-status.invalid {
     color: var(--error);
+}
+
+/* Driver Selection Highlight */
+#abastDriverSelectGroup,
+#insumoDriverSelectGroup {
+    background: rgba(245, 158, 11, 0.05);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    margin-top: -0.5rem;
 }
 
 .form-footer {

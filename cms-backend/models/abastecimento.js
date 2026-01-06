@@ -56,10 +56,22 @@ const Abastecimento = {
      * @returns {Object} - Updated abastecimento
      */
     async update(id, data) {
-        const { quantity, price_per_liter, comprovante_abastecimento, status, client } = data;
+        const { driver_id, date, plate, quantity, price_per_liter, comprovante_abastecimento, status, client } = data;
         const updates = [];
         const values = [];
 
+        if (driver_id !== undefined) {
+            updates.push('driver_id = ?');
+            values.push(driver_id);
+        }
+        if (date !== undefined) {
+            updates.push('date = ?');
+            values.push(date);
+        }
+        if (plate !== undefined) {
+            updates.push('plate = ?');
+            values.push(plate);
+        }
         if (quantity !== undefined) {
             updates.push('quantity = ?');
             values.push(quantity);

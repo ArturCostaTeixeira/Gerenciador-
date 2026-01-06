@@ -11,6 +11,8 @@ let currentCameraStream = null;
 let currentCameraType = null; // 'abast' or 'insumo'
 let capturedPhotoData = null;
 let driversData = []; // Store drivers for dropdown
+let platesData = []; // Store plates with associated drivers
+let selectedDriverId = null; // Store selected driver when plate has multiple drivers
 
 // Password reset state
 let resetCpf = null;
@@ -51,24 +53,37 @@ function formatCPFInput(input) {
 // Fetch drivers for the dropdown
 async function fetchDrivers() {
     try {
-        const drivers = await apiRequest('/abastecedor/drivers');
-        driversData = drivers;
-        return drivers;
+        const data = await apiRequest('/abastecedor/drivers');
+        // Store both formats
+        driversData = data.drivers || [];
+        platesData = data.plates || [];
+        return data;
     } catch (error) {
         console.error('Failed to fetch drivers:', error);
-        return [];
+        return { drivers: [], plates: [] };
     }
 }
 
-// Populate a plate select dropdown
-function populatePlateDropdown(selectElement, drivers) {
+// Populate a plate select dropdown with plates and their drivers info
+function populatePlateDropdown(selectElement, plates) {
     // Clear existing options except the first placeholder
     selectElement.innerHTML = '<option value="">Selecione uma placa...</option>';
 
-    drivers.forEach(driver => {
+    plates.forEach(plateInfo => {
+        // Only add valid plates (at least 4 characters like ABC-1234)
+        if (!plateInfo.plate || plateInfo.plate.length < 4) return;
+
         const option = document.createElement('option');
-        option.value = driver.plate;
-        option.textContent = `${driver.plate} - ${driver.name}`;
+        option.value = plateInfo.plate;
+        // Show just the plate in the dropdown - cleaner UI
+        // If multiple drivers, indicate it with (compartilhada)
+        if (plateInfo.multipleDrivers) {
+            option.textContent = `${plateInfo.plate} (compartilhada)`;
+        } else {
+            option.textContent = plateInfo.plate;
+        }
+        option.dataset.multipleDrivers = plateInfo.multipleDrivers;
+        option.dataset.drivers = JSON.stringify(plateInfo.drivers);
         selectElement.appendChild(option);
     });
 }
@@ -399,21 +414,38 @@ async function openModal(modalId) {
             dateInput.value = new Date().toISOString().split('T')[0];
         }
 
+        // Reset driver selection
+        selectedDriverId = null;
+
         // Fetch drivers and populate dropdown
-        if (driversData.length === 0) {
-            driversData = await fetchDrivers();
+        if (platesData.length === 0) {
+            await fetchDrivers();
         }
 
         // Populate the plate dropdown based on which modal
         if (modalId === 'modalAbastecimento') {
             const abastPlaca = document.getElementById('abastPlaca');
             if (abastPlaca) {
-                populatePlateDropdown(abastPlaca, driversData);
+                populatePlateDropdown(abastPlaca, platesData);
+            }
+            // Hide driver select initially
+            document.getElementById('abastDriverSelectGroup')?.classList.add('hidden');
+            const driverSelect = document.getElementById('abastDriverSelect');
+            if (driverSelect) {
+                driverSelect.innerHTML = '<option value="">Selecione um motorista...</option>';
+                driverSelect.required = false;
             }
         } else if (modalId === 'modalOutrosInsumos') {
             const insumoPlaca = document.getElementById('insumoPlaca');
             if (insumoPlaca) {
-                populatePlateDropdown(insumoPlaca, driversData);
+                populatePlateDropdown(insumoPlaca, platesData);
+            }
+            // Hide driver select initially
+            document.getElementById('insumoDriverSelectGroup')?.classList.add('hidden');
+            const driverSelect = document.getElementById('insumoDriverSelect');
+            if (driverSelect) {
+                driverSelect.innerHTML = '<option value="">Selecione um motorista...</option>';
+                driverSelect.required = false;
             }
         }
     }
@@ -533,25 +565,86 @@ function retakePhoto(type) {
 // Plate Selection Handler
 // ========================================
 
-function handlePlateSelection(type, plate) {
+function handlePlateSelection(type, plate, selectElement) {
     const statusElement = document.getElementById(`${type}PlacaStatus`);
+    const driverSelectGroup = document.getElementById(`${type}DriverSelectGroup`);
+    const driverSelect = document.getElementById(`${type}DriverSelect`);
+
+    // Reset driver selection
+    selectedDriverId = null;
 
     if (!plate) {
         statusElement.textContent = '';
         statusElement.className = 'input-hint plate-status';
+        driverSelectGroup?.classList.add('hidden');
+        if (driverSelect) driverSelect.required = false;
         return;
     }
 
-    // Find the driver from our cached data
-    const driver = driversData.find(d => d.plate === plate);
+    // Get the selected option to check if multiple drivers
+    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    const multipleDrivers = selectedOption?.dataset.multipleDrivers === 'true';
+    const drivers = selectedOption?.dataset.drivers ? JSON.parse(selectedOption.dataset.drivers) : [];
 
-    if (driver) {
-        statusElement.textContent = `✓ ${driver.name}`;
+    if (multipleDrivers && drivers.length > 1) {
+        // Show driver selection dropdown
+        statusElement.textContent = '⚠️ Selecione o motorista abaixo';
+        statusElement.className = 'input-hint plate-status warning';
+
+        // Populate driver dropdown
+        driverSelect.innerHTML = '<option value="">Selecione um motorista...</option>';
+        drivers.forEach(driver => {
+            const option = document.createElement('option');
+            option.value = driver.id;
+            option.textContent = driver.name;
+            driverSelect.appendChild(option);
+        });
+
+        driverSelectGroup?.classList.remove('hidden');
+        driverSelect.required = true;
+    } else if (drivers.length === 1) {
+        // Single driver - auto-select
+        selectedDriverId = drivers[0].id;
+        statusElement.textContent = `✓ ${drivers[0].name}`;
         statusElement.className = 'input-hint plate-status valid';
+        driverSelectGroup?.classList.add('hidden');
+        if (driverSelect) driverSelect.required = false;
     } else {
-        statusElement.textContent = '';
-        statusElement.className = 'input-hint plate-status';
+        // Fallback for backward compatibility
+        const driver = driversData.find(d => d.plate === plate);
+        if (driver) {
+            selectedDriverId = driver.id;
+            statusElement.textContent = `✓ ${driver.name}`;
+            statusElement.className = 'input-hint plate-status valid';
+        } else {
+            statusElement.textContent = '';
+            statusElement.className = 'input-hint plate-status';
+        }
+        driverSelectGroup?.classList.add('hidden');
+        if (driverSelect) driverSelect.required = false;
     }
+}
+
+// Handle driver selection from dropdown
+function handleDriverSelection(type, driverId) {
+    const statusElement = document.getElementById(`${type}PlacaStatus`);
+    const driverSelect = document.getElementById(`${type}DriverSelect`);
+
+    if (!driverId) {
+        selectedDriverId = null;
+        statusElement.textContent = '⚠️ Selecione o motorista';
+        statusElement.className = 'input-hint plate-status warning';
+        return;
+    }
+
+    selectedDriverId = parseInt(driverId);
+
+    // Find driver name
+    const selectedOption = driverSelect.options[driverSelect.selectedIndex];
+    const driverName = selectedOption?.textContent || '';
+
+    statusElement.textContent = `✓ ${driverName}`;
+    statusElement.className = 'input-hint plate-status valid';
 }
 
 // ========================================
@@ -562,12 +655,23 @@ async function submitAbastecimento(e) {
     e.preventDefault();
 
     const plate = document.getElementById('abastPlaca').value.trim();
+    const driverSelectGroup = document.getElementById('abastDriverSelectGroup');
+    const driverSelect = document.getElementById('abastDriverSelect');
     const date = document.getElementById('abastData').value;
     const liters = document.getElementById('abastLitros').value;
 
     if (!plate || !date || !liters) {
         showToast('Preencha todos os campos obrigatórios', 'error');
         return;
+    }
+
+    // If driver selection is visible and required, check it
+    if (!driverSelectGroup?.classList.contains('hidden') && driverSelect?.required) {
+        if (!driverSelect.value) {
+            showToast('Selecione um motorista', 'error');
+            return;
+        }
+        selectedDriverId = parseInt(driverSelect.value);
     }
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -578,6 +682,11 @@ async function submitAbastecimento(e) {
         formData.append('plate', plate);
         formData.append('date', date);
         formData.append('liters', liters);
+
+        // Include driver_id if selected (for shared plates)
+        if (selectedDriverId) {
+            formData.append('driver_id', selectedDriverId);
+        }
 
         // Add photo if captured
         if (capturedPhotoData) {
@@ -603,6 +712,8 @@ async function submitOutrosInsumos(e) {
     e.preventDefault();
 
     const plate = document.getElementById('insumoPlaca').value.trim();
+    const driverSelectGroup = document.getElementById('insumoDriverSelectGroup');
+    const driverSelect = document.getElementById('insumoDriverSelect');
     const date = document.getElementById('insumoData').value;
     const quantity = document.getElementById('insumoQuantidade').value;
     const description = document.getElementById('insumoDescricao').value.trim();
@@ -610,6 +721,15 @@ async function submitOutrosInsumos(e) {
     if (!plate || !date || !quantity) {
         showToast('Preencha todos os campos obrigatórios', 'error');
         return;
+    }
+
+    // If driver selection is visible and required, check it
+    if (!driverSelectGroup?.classList.contains('hidden') && driverSelect?.required) {
+        if (!driverSelect.value) {
+            showToast('Selecione um motorista', 'error');
+            return;
+        }
+        selectedDriverId = parseInt(driverSelect.value);
     }
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -620,6 +740,12 @@ async function submitOutrosInsumos(e) {
         formData.append('plate', plate);
         formData.append('date', date);
         formData.append('quantity', quantity);
+
+        // Include driver_id if selected (for shared plates)
+        if (selectedDriverId) {
+            formData.append('driver_id', selectedDriverId);
+        }
+
         if (description) {
             formData.append('description', description);
         }
@@ -710,7 +836,15 @@ function init() {
     const abastPlaca = document.getElementById('abastPlaca');
     if (abastPlaca) {
         abastPlaca.addEventListener('change', () => {
-            handlePlateSelection('abast', abastPlaca.value);
+            handlePlateSelection('abast', abastPlaca.value, abastPlaca);
+        });
+    }
+
+    // Driver select change handler - Abastecimento
+    const abastDriverSelect = document.getElementById('abastDriverSelect');
+    if (abastDriverSelect) {
+        abastDriverSelect.addEventListener('change', () => {
+            handleDriverSelection('abast', abastDriverSelect.value);
         });
     }
 
@@ -718,7 +852,15 @@ function init() {
     const insumoPlaca = document.getElementById('insumoPlaca');
     if (insumoPlaca) {
         insumoPlaca.addEventListener('change', () => {
-            handlePlateSelection('insumo', insumoPlaca.value);
+            handlePlateSelection('insumo', insumoPlaca.value, insumoPlaca);
+        });
+    }
+
+    // Driver select change handler - Outros Insumos
+    const insumoDriverSelect = document.getElementById('insumoDriverSelect');
+    if (insumoDriverSelect) {
+        insumoDriverSelect.addEventListener('change', () => {
+            handleDriverSelection('insumo', insumoDriverSelect.value);
         });
     }
 
@@ -776,5 +918,35 @@ function init() {
     }
 }
 
+// ========================================
+// Password Toggle
+// ========================================
+
+function initPasswordToggle() {
+    document.querySelectorAll('.password-toggle').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const targetId = this.getAttribute('data-target');
+            const input = document.getElementById(targetId);
+            const eyeIcon = this.querySelector('.eye-icon img');
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                eyeIcon.src = 'eye-closed.png';
+                eyeIcon.alt = 'Hide password';
+                this.classList.add('active');
+            } else {
+                input.type = 'password';
+                eyeIcon.src = 'eye-open.png';
+                eyeIcon.alt = 'Show password';
+                this.classList.remove('active');
+            }
+        });
+    });
+}
+
 // Start app
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+    init();
+    initPasswordToggle();
+});
+

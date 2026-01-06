@@ -90,6 +90,140 @@ app.get('/api/driver/profile', requireDriver, async (req, res) => {
     }
 });
 
+// ============================================
+// Driver Plate Management
+// ============================================
+
+const { isValidPlate, normalizePlate } = require('./utils/validators');
+
+// Get driver's plates
+app.get('/api/driver/plates', requireDriver, async (req, res) => {
+    try {
+        const driver = await Driver.findById(req.driver.id);
+        if (!driver) {
+            return res.status(404).json({ error: 'Driver not found' });
+        }
+
+        // Parse plates JSON or return empty array
+        let plates = [];
+        if (driver.plates) {
+            try {
+                plates = JSON.parse(driver.plates);
+            } catch (e) {
+                plates = [];
+            }
+        }
+
+        res.json({ plates });
+    } catch (error) {
+        console.error('Get driver plates error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Add a new plate
+app.post('/api/driver/plates', requireDriver, async (req, res) => {
+    try {
+        const { plate } = req.body;
+
+        if (!plate) {
+            return res.status(400).json({ error: 'Placa é obrigatória' });
+        }
+
+        if (!isValidPlate(plate)) {
+            return res.status(400).json({ error: 'Formato de placa inválido. Use ABC-1234 ou ABC-1D23' });
+        }
+
+        const normalizedPlate = normalizePlate(plate);
+
+        const driver = await Driver.findById(req.driver.id);
+        if (!driver) {
+            return res.status(404).json({ error: 'Driver not found' });
+        }
+
+        // Parse existing plates
+        let plates = [];
+        if (driver.plates) {
+            try {
+                plates = JSON.parse(driver.plates);
+            } catch (e) {
+                plates = [];
+            }
+        }
+
+        // Check if plate already exists in driver's list
+        if (plates.includes(normalizedPlate)) {
+            return res.status(409).json({ error: 'Esta placa já está cadastrada' });
+        }
+
+        // Add new plate
+        plates.push(normalizedPlate);
+
+        // Update driver
+        await Driver.update(req.driver.id, {
+            plates: plates,
+            plate: driver.plate || normalizedPlate // Set as primary if driver has no plate
+        });
+
+        res.status(201).json({
+            message: 'Placa adicionada com sucesso',
+            plates
+        });
+    } catch (error) {
+        console.error('Add driver plate error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Remove a plate
+app.delete('/api/driver/plates/:plate', requireDriver, async (req, res) => {
+    try {
+        const plateToRemove = req.params.plate.toUpperCase();
+
+        const driver = await Driver.findById(req.driver.id);
+        if (!driver) {
+            return res.status(404).json({ error: 'Driver not found' });
+        }
+
+        // Parse existing plates
+        let plates = [];
+        if (driver.plates) {
+            try {
+                plates = JSON.parse(driver.plates);
+            } catch (e) {
+                plates = [];
+            }
+        }
+
+        // Check if plate exists
+        if (!plates.includes(plateToRemove)) {
+            return res.status(404).json({ error: 'Placa não encontrada' });
+        }
+
+        // Remove plate
+        plates = plates.filter(p => p !== plateToRemove);
+
+        // Update driver
+        const updateData = { plates: plates };
+
+        // If removing the primary plate, set a new one or null
+        if (driver.plate === plateToRemove) {
+            updateData.plate = plates.length > 0 ? plates[0] : null;
+        }
+
+        await Driver.update(req.driver.id, updateData);
+
+        res.json({
+            message: 'Placa removida com sucesso',
+            plates
+        });
+    } catch (error) {
+        console.error('Remove driver plate error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+
 // Driver stats route (for dashboard summary cards)
 app.get('/api/driver/stats', requireDriver, async (req, res) => {
     try {
@@ -305,20 +439,38 @@ app.get('/api/abastecedor/profile', requireAbastecedor, async (req, res) => {
     }
 });
 
-// Abastecedor: Submit abastecimento by plate
+// Abastecedor: Submit abastecimento by plate or driver_id
 app.post('/api/abastecedor/abastecimento', requireAbastecedor, driverUpload.single('comprovante'), async (req, res) => {
     try {
-        const { plate, date, liters } = req.body;
+        const { plate, driver_id, date, liters } = req.body;
 
         // Validate input
-        if (!plate || !date || !liters) {
-            return res.status(400).json({ error: 'Placa, data e litros são obrigatórios' });
+        if ((!plate && !driver_id) || !date || !liters) {
+            return res.status(400).json({ error: 'Placa (ou motorista), data e litros são obrigatórios' });
         }
 
-        // Find driver by plate
-        const driver = await Driver.findByPlate(plate);
-        if (!driver) {
-            return res.status(404).json({ error: 'Veículo não encontrado com esta placa' });
+        let driver;
+
+        // If driver_id is provided, use it directly
+        if (driver_id) {
+            driver = await Driver.findById(parseInt(driver_id));
+            if (!driver) {
+                return res.status(404).json({ error: 'Motorista não encontrado' });
+            }
+        } else {
+            // Find driver by plate - if multiple drivers, return error asking to select
+            const drivers = await Driver.findAllByPlate(plate);
+            if (drivers.length === 0) {
+                return res.status(404).json({ error: 'Veículo não encontrado com esta placa' });
+            }
+            if (drivers.length > 1) {
+                return res.status(400).json({
+                    error: 'Múltiplos motoristas compartilham esta placa. Selecione um motorista.',
+                    multipleDrivers: true,
+                    drivers: drivers.map(d => ({ id: d.id, name: d.name }))
+                });
+            }
+            driver = drivers[0];
         }
 
         let comprovantePath = null;
@@ -371,20 +523,38 @@ app.post('/api/abastecedor/abastecimento', requireAbastecedor, driverUpload.sing
     }
 });
 
-// Abastecedor: Submit outros insumos by plate
+// Abastecedor: Submit outros insumos by plate or driver_id
 app.post('/api/abastecedor/outros-insumos', requireAbastecedor, driverUpload.single('comprovante'), async (req, res) => {
     try {
-        const { plate, date, quantity, description } = req.body;
+        const { plate, driver_id, date, quantity, description } = req.body;
 
         // Validate input
-        if (!plate || !date || !quantity) {
-            return res.status(400).json({ error: 'Placa, data e quantidade são obrigatórios' });
+        if ((!plate && !driver_id) || !date || !quantity) {
+            return res.status(400).json({ error: 'Placa (ou motorista), data e quantidade são obrigatórios' });
         }
 
-        // Find driver by plate
-        const driver = await Driver.findByPlate(plate);
-        if (!driver) {
-            return res.status(404).json({ error: 'Veículo não encontrado com esta placa' });
+        let driver;
+
+        // If driver_id is provided, use it directly
+        if (driver_id) {
+            driver = await Driver.findById(parseInt(driver_id));
+            if (!driver) {
+                return res.status(404).json({ error: 'Motorista não encontrado' });
+            }
+        } else {
+            // Find driver by plate - if multiple drivers, return error asking to select
+            const drivers = await Driver.findAllByPlate(plate);
+            if (drivers.length === 0) {
+                return res.status(404).json({ error: 'Veículo não encontrado com esta placa' });
+            }
+            if (drivers.length > 1) {
+                return res.status(400).json({
+                    error: 'Múltiplos motoristas compartilham esta placa. Selecione um motorista.',
+                    multipleDrivers: true,
+                    drivers: drivers.map(d => ({ id: d.id, name: d.name }))
+                });
+            }
+            driver = drivers[0];
         }
 
         let comprovantePath = null;
@@ -446,20 +616,98 @@ app.get('/api/abastecedor/validate-plate/:plate', requireAbastecedor, async (req
     }
 });
 
-// Abastecedor: Get all drivers (for dropdown)
+// Abastecedor: Get all drivers (for dropdown) - includes all plates
 app.get('/api/abastecedor/drivers', requireAbastecedor, async (req, res) => {
     try {
         const drivers = await Driver.findAll(true); // Get active drivers only
         // Filter to only include authenticated drivers
         const authenticatedDrivers = drivers.filter(d => d.authenticated === 1 || d.authenticated === true);
-        const simpleDrivers = authenticatedDrivers.map(d => ({
-            id: d.id,
-            name: d.name,
-            plate: d.plate
-        }));
-        res.json(simpleDrivers);
+
+        // Build a map of unique plates to drivers
+        const plateDriversMap = new Map();
+
+        authenticatedDrivers.forEach(d => {
+            // Parse plates JSON
+            let allPlates = [];
+            if (d.plate) allPlates.push(d.plate);
+            if (d.plates) {
+                try {
+                    const parsedPlates = JSON.parse(d.plates);
+                    // Ensure parsedPlates is an array before spreading
+                    if (Array.isArray(parsedPlates)) {
+                        allPlates = [...new Set([...allPlates, ...parsedPlates])];
+                    } else if (typeof parsedPlates === 'string' && parsedPlates.length > 2) {
+                        // If it's a string (single plate), add it directly
+                        allPlates = [...new Set([...allPlates, parsedPlates])];
+                    }
+                } catch (e) {
+                    // If JSON parse fails, treat plates as a plain string (single plate)
+                    if (typeof d.plates === 'string' && d.plates.length > 2) {
+                        allPlates = [...new Set([...allPlates, d.plates])];
+                    }
+                }
+            }
+
+            // Add each plate to map
+            allPlates.forEach(plate => {
+                if (!plateDriversMap.has(plate)) {
+                    plateDriversMap.set(plate, []);
+                }
+                plateDriversMap.get(plate).push({
+                    id: d.id,
+                    name: d.name
+                });
+            });
+        });
+
+        // Convert to array format for frontend
+        const platesWithDrivers = [];
+        plateDriversMap.forEach((drivers, plate) => {
+            platesWithDrivers.push({
+                plate,
+                drivers,
+                multipleDrivers: drivers.length > 1
+            });
+        });
+
+        // Sort by plate
+        platesWithDrivers.sort((a, b) => a.plate.localeCompare(b.plate));
+
+        res.json({
+            plates: platesWithDrivers,
+            // Also include simple driver list for backward compatibility
+            drivers: authenticatedDrivers.map(d => ({
+                id: d.id,
+                name: d.name,
+                plate: d.plate
+            }))
+        });
     } catch (error) {
         console.error('Get abastecedor drivers error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Abastecedor: Get drivers by plate (when multiple drivers share a plate)
+app.get('/api/abastecedor/drivers-by-plate/:plate', requireAbastecedor, async (req, res) => {
+    try {
+        const plate = req.params.plate.toUpperCase();
+        const drivers = await Driver.findAllByPlate(plate);
+
+        if (drivers.length === 0) {
+            return res.status(404).json({ error: 'Nenhum motorista encontrado com esta placa' });
+        }
+
+        res.json({
+            plate,
+            drivers: drivers.map(d => ({
+                id: d.id,
+                name: d.name
+            })),
+            multipleDrivers: drivers.length > 1
+        });
+    } catch (error) {
+        console.error('Get drivers by plate error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

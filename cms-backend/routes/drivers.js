@@ -13,26 +13,44 @@ router.use(requireAdmin);
  */
 router.post('/', async (req, res) => {
     try {
-        const { name, plate, cpf, password, phone, client } = req.body;
+        const { name, plate, cpf, password, phone, client, plates } = req.body;
 
-        // Validate input
-        if (!name || !plate || !cpf || !password) {
+        // Validate input - plate is now optional
+        if (!name || !cpf || !password) {
             return res.status(400).json({
-                error: 'Nome, placa, CPF e senha são obrigatórios'
+                error: 'Nome, CPF e senha são obrigatórios'
             });
         }
 
-        if (!isValidPlate(plate)) {
-            return res.status(400).json({
-                error: 'Formato de placa inválido. Use ABC-1234 ou ABC1D23'
-            });
+        // Validate plate format if provided
+        let normalizedPlate = null;
+        if (plate && plate.trim()) {
+            if (!isValidPlate(plate)) {
+                return res.status(400).json({
+                    error: 'Formato de placa inválido. Use ABC-1234 ou ABC1D23'
+                });
+            }
+            normalizedPlate = normalizePlate(plate);
         }
 
-        // Check if plate already exists
-        const normalizedPlate = normalizePlate(plate);
-        const existing = await Driver.findByPlate(normalizedPlate);
-        if (existing) {
-            return res.status(409).json({ error: 'Placa já cadastrada' });
+        // Validate and normalize plates array if provided
+        let normalizedPlates = [];
+        if (plates && Array.isArray(plates)) {
+            for (const p of plates) {
+                if (p && p.trim()) {
+                    if (!isValidPlate(p)) {
+                        return res.status(400).json({
+                            error: `Formato de placa inválido: ${p}. Use ABC-1234 ou ABC1D23`
+                        });
+                    }
+                    normalizedPlates.push(normalizePlate(p));
+                }
+            }
+        }
+
+        // If plate is provided but not in plates array, add it
+        if (normalizedPlate && !normalizedPlates.includes(normalizedPlate)) {
+            normalizedPlates.unshift(normalizedPlate);
         }
 
         // Check if CPF already exists
@@ -44,7 +62,8 @@ router.post('/', async (req, res) => {
 
         const driver = await Driver.create({
             name: name.trim(),
-            plate: normalizedPlate,
+            plate: normalizedPlate || (normalizedPlates.length > 0 ? normalizedPlates[0] : null),
+            plates: normalizedPlates,
             cpf: cpfClean,
             password,
             phone: phone ? phone.replace(/\D/g, '') : null,
@@ -134,21 +153,16 @@ router.put('/:id', async (req, res) => {
                 });
             }
             const normalizedPlate = normalizePlate(plate);
-            // Check if plate belongs to another driver
-            const existing = await Driver.findByPlate(normalizedPlate);
-            if (existing && existing.id !== parseInt(req.params.id)) {
-                return res.status(409).json({ error: 'Plate already registered to another driver' });
-            }
             updates.plate = normalizedPlate;
         }
 
         if (plates !== undefined) {
-            // Validate and normalize additional plates
+            // Validate and normalize additional plates - pass array, model will stringify
             if (plates && Array.isArray(plates)) {
                 const normalizedPlates = plates.map(p => normalizePlate(p)).filter(p => p);
-                updates.plates = JSON.stringify(normalizedPlates);
+                updates.plates = normalizedPlates; // Pass array, not JSON string
             } else {
-                updates.plates = null;
+                updates.plates = [];
             }
         }
 

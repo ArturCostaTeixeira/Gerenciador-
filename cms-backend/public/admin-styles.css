@@ -197,6 +197,61 @@ select.filter-input,
     background-color: rgba(255, 255, 255, 0.05);
 }
 
+/* Password Toggle */
+.password-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-wrapper input {
+    flex: 1;
+    padding-right: 3rem;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--transition-fast);
+    font-size: 1.1rem;
+}
+
+.password-toggle:hover {
+    color: var(--text-primary);
+}
+
+.password-toggle .eye-icon {
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.password-toggle .eye-icon img {
+    width: 20px;
+    height: 20px;
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+}
+
+.password-toggle:hover .eye-icon img {
+    opacity: 0.8;
+}
+
+.password-toggle.active .eye-icon img {
+    opacity: 1;
+}
+
 /* Buttons */
 .btn {
     display: inline-flex;

@@ -162,10 +162,12 @@ adminRouter.put('/:id', upload.single('comprovante_abastecimento'), async (req, 
             return res.status(404).json({ error: 'Abastecimento not found' });
         }
 
-        const { date, quantity, price_per_liter, client } = req.body;
+        const { driver_id, date, plate, quantity, price_per_liter, client } = req.body;
         const updateData = {};
 
+        if (driver_id !== undefined) updateData.driver_id = parseInt(driver_id);
         if (date !== undefined) updateData.date = date;
+        if (plate !== undefined) updateData.plate = plate;
         if (quantity !== undefined) updateData.quantity = parseFloat(quantity);
         if (price_per_liter !== undefined) updateData.price_per_liter = parseFloat(price_per_liter);
         if (client !== undefined) updateData.client = client;

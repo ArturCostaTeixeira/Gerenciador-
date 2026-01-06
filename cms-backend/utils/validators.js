@@ -1,23 +1,37 @@
 /**
  * Validates Brazilian vehicle plate format
- * Accepts: ABC-1234 (old) or ABC-1D23 (Mercosul)
+ * Accepts: ABC-1234 (old), ABC1234 (old without hyphen), ABC-1D23, ABC1D23 (Mercosul)
  * @param {string} plate - The plate to validate
  * @returns {boolean} - True if valid
  */
 function isValidPlate(plate) {
     if (!plate || typeof plate !== 'string') return false;
-    const plateRegex = /^[A-Z]{3}-\d[A-Z0-9]\d{2}$/i;
-    return plateRegex.test(plate.trim());
+    const clean = plate.trim().toUpperCase().replace(/-/g, '');
+    // Old format: ABC1234 (7 chars: 3 letters + 4 numbers)
+    // New format: ABC1D23 (7 chars: 3 letters + 1 number + 1 letter + 2 numbers)
+    const plateRegex = /^[A-Z]{3}\d[A-Z0-9]\d{2}$/;
+    return plateRegex.test(clean);
 }
 
 /**
- * Normalizes plate to uppercase with dash
+ * Normalizes plate to uppercase with dash for old format
  * @param {string} plate - The plate to normalize
- * @returns {string} - Normalized plate
+ * @returns {string} - Normalized plate (ABC-1234 or ABC1D23)
  */
 function normalizePlate(plate) {
     if (!plate) return '';
-    return plate.trim().toUpperCase();
+    const clean = plate.trim().toUpperCase().replace(/-/g, '');
+    if (clean.length !== 7) return clean;
+
+    // Check if it's new Mercosul format (has letter in 5th position)
+    const hasLetterIn5thPosition = /[A-Z]/.test(clean[4]);
+    if (hasLetterIn5thPosition) {
+        // New format: ABC1D23 (no hyphen)
+        return clean;
+    } else {
+        // Old format: ABC-1234 (with hyphen)
+        return `${clean.slice(0, 3)}-${clean.slice(3)}`;
+    }
 }
 
 /**

@@ -67,7 +67,7 @@ async function initDatabase() {
         CREATE TABLE IF NOT EXISTS drivers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            plate TEXT NOT NULL UNIQUE,
+            plate TEXT,
             price_per_km_ton REAL NOT NULL,
             client TEXT,
             active INTEGER DEFAULT 1,
@@ -306,6 +306,22 @@ async function initDatabase() {
     try {
         await exec(`ALTER TABLE freights ADD COLUMN plate TEXT`);
         console.log('Added plate column to freights');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    // Add plate column to abastecimentos for tracking which vehicle was refueled
+    try {
+        await exec(`ALTER TABLE abastecimentos ADD COLUMN plate TEXT`);
+        console.log('Added plate column to abastecimentos');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    // Add documento_frete column to freights for storing PDF documents
+    try {
+        await exec(`ALTER TABLE freights ADD COLUMN documento_frete TEXT`);
+        console.log('Added documento_frete column to freights');
     } catch (e) {
         // Column already exists, ignore
     }

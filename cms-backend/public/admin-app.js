@@ -329,14 +329,20 @@ function renderDriversTable(filter = '') {
             let platesDisplay = u.plate || '-';
             if (isMotorista && u.plates) {
                 try {
-                    const additionalPlates = typeof u.plates === 'string' ? JSON.parse(u.plates) : u.plates;
-                    if (Array.isArray(additionalPlates) && additionalPlates.length > 0) {
-                        const allPlates = [u.plate, ...additionalPlates];
-                        platesDisplay = allPlates.map(p => `<span class="plate-badge">${p}</span>`).join('');
+                    const platesArray = typeof u.plates === 'string' ? JSON.parse(u.plates) : u.plates;
+                    if (Array.isArray(platesArray) && platesArray.length > 0) {
+                        // Deduplicate: use the plates array (which should include primary)
+                        const uniquePlates = [...new Set(platesArray)];
+                        platesDisplay = uniquePlates.map(p => `<span class="plate-badge">${p}</span>`).join('');
                     }
                 } catch (e) {
                     // If parsing fails, just show the primary plate
+                    if (u.plate) {
+                        platesDisplay = `<span class="plate-badge">${u.plate}</span>`;
+                    }
                 }
+            } else if (isMotorista && u.plate) {
+                platesDisplay = `<span class="plate-badge">${u.plate}</span>`;
             }
 
             // Actions based on user type - only Edit button now
@@ -400,11 +406,13 @@ window.editDriver = async function (id) {
     const clientOptions = '<option value="">Selecione um cliente (Opcional)</option>' +
         clients.map(c => `<option value="${c.client}" ${driver.client === c.client ? 'selected' : ''}>${c.client}</option>`).join('');
 
-    // Parse additional plates
+    // Parse additional plates (exclude primary plate from the list)
     let additionalPlates = [];
     if (driver.plates) {
         try {
-            additionalPlates = typeof driver.plates === 'string' ? JSON.parse(driver.plates) : driver.plates;
+            const allPlates = typeof driver.plates === 'string' ? JSON.parse(driver.plates) : driver.plates;
+            // Filter out the primary plate to show only additional ones
+            additionalPlates = allPlates.filter(p => p !== driver.plate);
         } catch (e) { }
     }
 
@@ -461,22 +469,31 @@ window.editDriver = async function (id) {
     `, async () => {
         // Collect additional plates
         const plateInputs = document.querySelectorAll('.edit-additional-plate');
-        const plates = Array.from(plateInputs).map(input => input.value.trim().toUpperCase()).filter(v => v);
+        const additionalPlates = Array.from(plateInputs).map(input => input.value.trim().toUpperCase()).filter(v => v);
+        const primaryPlate = document.getElementById('editDriverPlate').value.trim().toUpperCase();
 
-        await apiRequest(`/admin/drivers/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify({
-                name: document.getElementById('editDriverName').value,
-                cpf: document.getElementById('editDriverCpf').value.replace(/\D/g, ''),
-                phone: document.getElementById('editDriverPhone').value.replace(/\D/g, '') || null,
-                plate: document.getElementById('editDriverPlate').value.toUpperCase(),
-                plates: plates.length > 0 ? plates : null,
-                client: document.getElementById('editDriverClient').value || null,
-                active: document.getElementById('editDriverActive').value === 'true'
-            })
-        });
-        await loadDrivers();
-        await loadClients();
+        // Combine primary plate with additional plates (primary first, no duplicates)
+        const allPlates = [primaryPlate, ...additionalPlates.filter(p => p !== primaryPlate)];
+
+        try {
+            await apiRequest(`/admin/drivers/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    name: document.getElementById('editDriverName').value,
+                    cpf: document.getElementById('editDriverCpf').value.replace(/\D/g, ''),
+                    phone: document.getElementById('editDriverPhone').value.replace(/\D/g, '') || null,
+                    plate: primaryPlate,
+                    plates: allPlates,
+                    client: document.getElementById('editDriverClient').value || null,
+                    active: document.getElementById('editDriverActive').value === 'true'
+                })
+            });
+            await loadDrivers();
+            await loadClients();
+        } catch (error) {
+            console.error('Update driver error:', error);
+            alert('Erro ao atualizar motorista: ' + error.message);
+        }
     });
 
     // Attach input formatters after modal is rendered
@@ -856,6 +873,14 @@ function renderFreightsTable() {
                 recebimentoCell = '<span class="text-muted">-</span>';
             }
 
+            // Documento frete cell (PDF)
+            let documentoCell;
+            if (f.documento_frete) {
+                documentoCell = `<a href="${f.documento_frete}" target="_blank" class="btn btn-sm btn-outline">📄</a>`;
+            } else {
+                documentoCell = '<span class="text-muted">-</span>';
+            }
+
             // Status badge (only for complete freights with value)
             const isPaid = f.paid === 1 || f.paid === true;
             let statusCell;
@@ -880,6 +905,7 @@ function renderFreightsTable() {
                     <td>${f.tons > 0 ? formatNumber(f.tons, 2) : '<span class="text-muted">-</span>'}</td>
                     <td>${cargaCell}</td>
                     <td>${descargaCell}</td>
+                    <td>${documentoCell}</td>
                     <td>${actionBtn}</td>
                 </tr>
             `;
@@ -1085,18 +1111,36 @@ window.editFreight = async function (id) {
     const clientOptions = '<option value="">Selecione um cliente</option>' +
         allClients.map(c => `<option value="${c}" ${freight.client === c ? 'selected' : ''}>${c}</option>`).join('');
 
-    // Get driver's plates for the plate select
-    const driver = drivers.find(d => d.id === freight.driver_id);
-    let driverPlates = driver ? [driver.plate] : [];
-    if (driver && driver.plates) {
-        try {
-            const additionalPlates = typeof driver.plates === 'string' ? JSON.parse(driver.plates) : driver.plates;
-            if (Array.isArray(additionalPlates)) {
-                driverPlates = [...driverPlates, ...additionalPlates];
+    // Build driver options dropdown
+    const driverOptions = drivers.map(d =>
+        `<option value="${d.id}" ${freight.driver_id === d.id ? 'selected' : ''}>${d.name}</option>`
+    ).join('');
+
+    // Helper function to get all plates for a driver
+    const getDriverPlates = (driver) => {
+        if (!driver) return [];
+        let plates = [];
+        if (driver.plate) plates.push(driver.plate);
+        if (driver.plates) {
+            try {
+                const additionalPlates = typeof driver.plates === 'string' ? JSON.parse(driver.plates) : driver.plates;
+                if (Array.isArray(additionalPlates)) {
+                    plates = [...new Set([...plates, ...additionalPlates])];
+                }
+            } catch (e) {
+                // Ignore parse errors
             }
-        } catch (e) { }
-    }
-    const plateOptions = driverPlates.map(p => `<option value="${p}" ${freight.plate === p ? 'selected' : ''}>${p}</option>`).join('');
+        }
+        return plates;
+    };
+
+    // Get plates for the current driver
+    const currentDriver = drivers.find(d => d.id === freight.driver_id);
+    const currentPlate = freight.plate || freight.driver_plate || '';
+    const currentDriverPlates = getDriverPlates(currentDriver);
+    const plateOptions = currentDriverPlates.map(p =>
+        `<option value="${p}" ${currentPlate === p ? 'selected' : ''}>${p}</option>`
+    ).join('') || '<option value="">Nenhuma placa</option>';
 
     const isPending = freight.status === 'pending';
     const title = isPending ? 'Completar Frete' : 'Editar Frete';
@@ -1105,7 +1149,7 @@ window.editFreight = async function (id) {
         <input type="hidden" id="editFreightId" value="${id}">
         <div class="input-group">
             <label>Motorista</label>
-            <input type="text" value="${freight.driver_name || '-'}" disabled>
+            <select id="editFreightDriver" required>${driverOptions}</select>
         </div>
         <div class="input-group">
             <label>Placa</label>
@@ -1145,11 +1189,17 @@ window.editFreight = async function (id) {
             <input type="file" id="editFreightDescarga" class="file-input" accept="image/png, image/jpeg">
             ${freight.comprovante_descarga ? `<a href="${freight.comprovante_descarga}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📷 Ver atual</a>` : ''}
         </div>
-    `, async () => {
+        <div class="input-group">
+            <label>Documento do Frete (PDF) ${freight.documento_frete ? '(já anexado - enviar novo substitui)' : ''}</label>
+            <input type="file" id="editFreightDocumento" class="file-input" accept="application/pdf,.pdf">
+            ${freight.documento_frete ? `<a href="${freight.documento_frete}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📄 Ver atual</a>` : ''}
+        </div>
+    \`, async () => {
         const formData = new FormData();
+        formData.append('driver_id', document.getElementById('editFreightDriver').value);
+        formData.append('plate', document.getElementById('editFreightPlate').value);
         formData.append('date', document.getElementById('editFreightDate').value);
         formData.append('client', document.getElementById('editFreightClient').value);
-        formData.append('plate', document.getElementById('editFreightPlate').value);
         formData.append('km', parseFloat(document.getElementById('editFreightKm').value));
         formData.append('tons', parseFloat(document.getElementById('editFreightTons').value));
         formData.append('price_per_km_ton', parseFloat(document.getElementById('editFreightPrice').value));
@@ -1159,14 +1209,16 @@ window.editFreight = async function (id) {
 
         const cargaFile = document.getElementById('editFreightCarga').files[0];
         const descargaFile = document.getElementById('editFreightDescarga').files[0];
+        const documentoFile = document.getElementById('editFreightDocumento').files[0];
 
         if (cargaFile) formData.append('comprovante_carga', cargaFile);
         if (descargaFile) formData.append('comprovante_descarga', descargaFile);
+        if (documentoFile) formData.append('documento_frete', documentoFile);
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (token) headers['Authorization'] = `Bearer ${ token }`;
 
-        const response = await fetch(`${API_BASE}/admin/freights/${id}`, {
+        const response = await fetch(`${ API_BASE } / admin / freights / ${ id }`, {
             method: 'PUT',
             headers,
             body: formData
@@ -1179,12 +1231,13 @@ window.editFreight = async function (id) {
 
         await loadFreights();
         await loadClients();
+        renderFreightsTable();
     }, async () => {
         // Delete callback
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (token) headers['Authorization'] = `Bearer ${ token }`;
 
-        const response = await fetch(`${API_BASE}/admin/freights/${id}`, {
+        const response = await fetch(`${ API_BASE } / admin / freights / ${ id }`, {
             method: 'DELETE',
             headers
         });
@@ -1197,20 +1250,38 @@ window.editFreight = async function (id) {
         await loadFreights();
         await loadClients();
     });
+
+    // Add event listener to update plate dropdown when driver changes
+    setTimeout(() => {
+        const driverSelect = document.getElementById('editFreightDriver');
+        const plateSelect = document.getElementById('editFreightPlate');
+
+        if (driverSelect && plateSelect) {
+            driverSelect.addEventListener('change', function () {
+                const selectedDriverId = parseInt(this.value);
+                const selectedDriver = drivers.find(d => d.id === selectedDriverId);
+                const plates = getDriverPlates(selectedDriver);
+
+                plateSelect.innerHTML = plates.length > 0
+                    ? plates.map(p => `< option value = "${p}" > ${ p }</option > `).join('')
+                    : '<option value="">Nenhuma placa</option>';
+            });
+        }
+    }, 100);
 };
 
 function showAddFreightModal() {
-    const driverOptions = drivers.map(d => `<option value="${d.id}">${d.name} (${d.plate})</option>`).join('');
+    const driverOptions = drivers.map(d => `< option value = "${d.id}" > ${ d.name }(${ d.plate })</option > `).join('');
     const uniqueClients = [...new Set(drivers.filter(d => d.client).map(d => d.client))];
     const clientOptions = '<option value="">Selecione um cliente</option>' +
-        clients.map(c => `<option value="${c.client}">${c.client}</option>`).join('') +
-        uniqueClients.filter(c => !clients.some(cl => cl.client === c)).map(c => `<option value="${c}">${c}</option>`).join('');
+        clients.map(c => `< option value = "${c.client}" > ${ c.client }</option > `).join('') +
+        uniqueClients.filter(c => !clients.some(cl => cl.client === c)).map(c => `< option value = "${c}" > ${ c }</option > `).join('');
 
     showModal('Novo Frete', `
-        <div class="input-group">
+    < div class= "input-group" >
             <label>Motorista</label>
             <select id="newFreightDriver" required>${driverOptions}</select>
-        </div>
+        </div >
         <div class="input-group">
             <label>Cliente</label>
             <select id="newFreightClient" required>${clientOptions}</select>
@@ -1266,9 +1337,9 @@ function showAddFreightModal() {
         }
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (token) headers['Authorization'] = `Bearer ${ token }`;
 
-        const response = await fetch(`${API_BASE}/admin/freights`, {
+        const response = await fetch(`${ API_BASE } / admin / freights`, {
             method: 'POST',
             headers,
             body: formData
@@ -1326,12 +1397,12 @@ function renderAbastecimentosTable() {
     const pageItems = filtered.slice(start, end);
 
     // Update UI Controls
-    document.getElementById('abastecimentosPageInfo').textContent = `Página ${pagination.abastecimentos.page} de ${totalPages}`;
+    document.getElementById('abastecimentosPageInfo').textContent = `Página ${ pagination.abastecimentos.page } de ${ totalPages }`;
     document.getElementById('abastecimentosPrevBtn').disabled = pagination.abastecimentos.page === 1;
     document.getElementById('abastecimentosNextBtn').disabled = pagination.abastecimentos.page === totalPages;
 
     tbody.innerHTML = pageItems.length === 0
-        ? '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">Nenhum abastecimento encontrado</td></tr>'
+        ? '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Nenhum abastecimento encontrado</td></tr>'
         : pageItems.map(a => {
             const driver = drivers.find(d => d.id === a.driver_id);
             const isPending = a.status === 'pending';
@@ -1341,43 +1412,46 @@ function renderAbastecimentosTable() {
             if (a.comprovante_abastecimento) {
                 // Already has a comprovante assigned - show view link and option to change
                 comprovanteCell = `
-                    <div class="descarga-dropdown">
+    < div class= "descarga-dropdown" >
                         <a href="${a.comprovante_abastecimento}" target="_blank" class="btn btn-sm btn-outline">📷</a>
                         <button class="btn btn-sm btn-outline" onclick="showAbastComprovanteDropdown(${a.id}, event)">⚙️</button>
-                    </div>
-                `;
+                    </div >
+        `;
             } else {
                 // No comprovante - show dropdown to select one
                 comprovanteCell = `
-                    <select class="descarga-select" onchange="assignAbastComprovante(${a.id}, this.value)" data-abast-id="${a.id}">
-                        <option value="">Selecionar...</option>
-                        ${unassignedComprovantesAbast.map(c =>
-                    `<option value="${c.id}">${c.display_name}</option>`
-                ).join('')}
-                    </select>
-                `;
+        < select class= "descarga-select" onchange = "assignAbastComprovante(${a.id}, this.value)" data - abast - id="${a.id}" >
+    <option value="">Selecionar...</option>
+                        ${
+        unassignedComprovantesAbast.map(c =>
+            `<option value="${c.id}">${c.display_name}</option>`
+        ).join('')
+    }
+                    </select >
+        `;
             }
 
             // Action button - Completar for pending, Editar for complete
             const actionBtn = isPending
-                ? `<button class="btn btn-sm btn-primary" onclick="editAbastecimento(${a.id})">Completar</button>`
-                : `<button class="btn btn-sm btn-outline" onclick="editAbastecimento(${a.id})">Editar</button>`;
+                ? `< button class= "btn btn-sm btn-primary" onclick = "editAbastecimento(${a.id})" > Completar</button > `
+                : `< button class= "btn btn-sm btn-outline" onclick = "editAbastecimento(${a.id})" > Editar</button > `;
 
             // Status badge for paid status
             const isPaid = a.paid === 1 || a.paid === true;
             let statusCell;
             if (!isPending && a.total_value > 0) {
                 statusCell = isPaid
-                    ? `<span class="status-badge status-paid">Pago</span>`
-                    : `<span class="status-badge status-pending">Pendente</span>`;
+                    ? `< span class= "status-badge status-paid" > Pago</span > `
+                    : `< span class= "status-badge status-pending" > Pendente</span > `;
             } else {
                 statusCell = '<span class="text-muted">-</span>';
             }
 
             return `
-                <tr class="${isPending ? 'row-pending' : ''}">
+    < tr class= "${isPending ? 'row-pending' : ''}" >
                     <td>${formatDate(a.date)}</td>
                     <td>${a.driver_name || driver?.name || '-'}</td>
+                    <td>${a.driver_plate || driver?.plate || '-'}</td>
                     <td>${a.client || driver?.client || '-'}</td>
                     <td>${isPending ? '<span class="text-muted">-</span>' : formatNumber(a.quantity, 2)}</td>
                     <td>${isPending ? '<span class="text-muted">-</span>' : formatPricePerLiter(a.price_per_liter)}</td>
@@ -1385,8 +1459,8 @@ function renderAbastecimentosTable() {
                     <td>${comprovanteCell}</td>
                     <td>${statusCell}</td>
                     <td>${actionBtn}</td>
-                </tr>
-            `;
+                </tr >
+        `;
         }).join('');
 }
 
@@ -1395,7 +1469,7 @@ window.assignAbastComprovante = async function (abastecimentoId, comprovanteId) 
     if (!comprovanteId) return;
 
     try {
-        await apiRequest(`/admin/comprovantes-abastecimento/${comprovanteId}/assign`, {
+        await apiRequest(`/ admin / comprovantes - abastecimento / ${ comprovanteId } / assign`, {
             method: 'POST',
             body: JSON.stringify({ abastecimento_id: abastecimentoId })
         });
@@ -1421,7 +1495,7 @@ window.showAbastComprovanteDropdown = function (abastecimentoId, event) {
     const popup = document.createElement('div');
     popup.className = 'descarga-popup glass';
     popup.innerHTML = `
-        <div class="descarga-popup-content">
+    < div class= "descarga-popup-content" >
             <p style="margin-bottom: 0.5rem; font-weight: 600;">Alterar Comprovante</p>
             <select id="abastComprovantePopupSelect" class="filter-input" style="margin-bottom: 0.5rem;">
                 <option value="">Selecionar novo...</option>
@@ -1434,8 +1508,8 @@ window.showAbastComprovanteDropdown = function (abastecimentoId, event) {
                 <button class="btn btn-sm btn-outline" onclick="unassignAbastComprovante(${abastecimentoId})">Remover</button>
                 <button class="btn btn-sm btn-outline" onclick="closeDescargaPopup()">Cancelar</button>
             </div>
-        </div>
-    `;
+        </div >
+        `;
 
     document.body.appendChild(popup);
 
@@ -1459,7 +1533,7 @@ window.applyAbastComprovanteChange = async function (abastecimentoId) {
 
 window.unassignAbastComprovante = async function (abastecimentoId) {
     try {
-        await apiRequest(`/admin/abastecimentos/${abastecimentoId}/unassign-comprovante`, {
+        await apiRequest(`/ admin / abastecimentos / ${ abastecimentoId } / unassign - comprovante`, {
             method: 'POST'
         });
 
@@ -1481,13 +1555,49 @@ window.editAbastecimento = async function (id) {
 
     const allClients = [...new Set(clients.map(c => c.client))];
     const clientOptions = '<option value="">(Opcional) Selecione um cliente</option>' +
-        allClients.map(c => `<option value="${c}" ${abastecimento.client === c ? 'selected' : ''}>${c}</option>`).join('');
+        allClients.map(c => `< option value = "${c}" ${ abastecimento.client === c ? 'selected' : '' } > ${ c }</option > `).join('');
+
+    // Build driver options dropdown
+    const driverOptions = drivers.map(d =>
+        `< option value = "${d.id}" ${ abastecimento.driver_id === d.id ? 'selected' : '' } > ${ d.name }</option > `
+    ).join('');
+
+    // Get plates for the current driver
+    const currentDriver = drivers.find(d => d.id === abastecimento.driver_id);
+    const currentPlate = abastecimento.plate || abastecimento.driver_plate || '';
+
+    // Helper function to get all plates for a driver
+    const getDriverPlates = (driver) => {
+        if (!driver) return [];
+        let plates = [];
+        if (driver.plate) plates.push(driver.plate);
+        if (driver.plates) {
+            try {
+                const additionalPlates = typeof driver.plates === 'string' ? JSON.parse(driver.plates) : driver.plates;
+                if (Array.isArray(additionalPlates)) {
+                    plates = [...new Set([...plates, ...additionalPlates])];
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
+        return plates;
+    };
+
+    const currentDriverPlates = getDriverPlates(currentDriver);
+    const plateOptions = currentDriverPlates.map(p =>
+        `< option value = "${p}" ${ currentPlate === p ? 'selected' : ''} > ${ p }</option > `
+    ).join('') || '<option value="">Nenhuma placa</option>';
 
     showModal(title, `
-        <input type="hidden" id="editAbastId" value="${id}">
+    < input type = "hidden" id = "editAbastId" value = "${id}" >
         <div class="input-group">
             <label>Motorista</label>
-            <input type="text" value="${abastecimento.driver_name || '-'}" disabled>
+            <select id="editAbastDriver" required>${driverOptions}</select>
+        </div>
+        <div class="input-group">
+            <label>Placa</label>
+            <select id="editAbastPlate" required>${plateOptions}</select>
         </div>
         <div class="input-group">
             <label>Data</label>
@@ -1510,8 +1620,10 @@ window.editAbastecimento = async function (id) {
             <input type="file" id="editAbastComprovante" class="file-input" accept="image/png, image/jpeg">
             ${abastecimento.comprovante_abastecimento ? `<a href="${abastecimento.comprovante_abastecimento}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📷 Ver atual</a>` : ''}
         </div>
-    `, async () => {
+`, async () => {
         const formData = new FormData();
+        formData.append('driver_id', document.getElementById('editAbastDriver').value);
+        formData.append('plate', document.getElementById('editAbastPlate').value);
         formData.append('date', document.getElementById('editAbastDate').value);
         formData.append('quantity', parseFloat(document.getElementById('editAbastQuantity').value));
         formData.append('price_per_liter', parseFloat(document.getElementById('editAbastPrice').value));
@@ -1521,9 +1633,9 @@ window.editAbastecimento = async function (id) {
         if (comprovanteFile) formData.append('comprovante_abastecimento', comprovanteFile);
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (token) headers['Authorization'] = `Bearer ${ token } `;
 
-        const response = await fetch(`${API_BASE}/admin/abastecimentos/${id}`, {
+        const response = await fetch(`${ API_BASE } /admin/abastecimentos / ${ id } `, {
             method: 'PUT',
             headers,
             body: formData
@@ -1535,12 +1647,13 @@ window.editAbastecimento = async function (id) {
         }
 
         await loadAbastecimentos();
+        renderAbastecimentosTable();
     }, async () => {
         // Delete callback
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (token) headers['Authorization'] = `Bearer ${ token } `;
 
-        const response = await fetch(`${API_BASE}/admin/abastecimentos/${id}`, {
+        const response = await fetch(`${ API_BASE } /admin/abastecimentos / ${ id } `, {
             method: 'DELETE',
             headers
         });
@@ -1552,15 +1665,33 @@ window.editAbastecimento = async function (id) {
 
         await loadAbastecimentos();
     });
+
+    // Add event listener to update plate dropdown when driver changes
+    setTimeout(() => {
+        const driverSelect = document.getElementById('editAbastDriver');
+        const plateSelect = document.getElementById('editAbastPlate');
+
+        if (driverSelect && plateSelect) {
+            driverSelect.addEventListener('change', function () {
+                const selectedDriverId = parseInt(this.value);
+                const selectedDriver = drivers.find(d => d.id === selectedDriverId);
+                const plates = getDriverPlates(selectedDriver);
+
+                plateSelect.innerHTML = plates.length > 0
+                    ? plates.map(p => `< option value = "${p}" > ${ p }</option > `).join('')
+                    : '<option value="">Nenhuma placa</option>';
+            });
+        }
+    }, 100);
 };
 
 function showAddAbastecimentoModal() {
-    const options = drivers.map(d => `<option value="${d.id}">${d.name} (${d.plate})</option>`).join('');
+    const options = drivers.map(d => `< option value = "${d.id}" > ${ d.name } (${ d.plate })</option > `).join('');
     showModal('Novo Abastecimento', `
-        <div class="input-group">
+    < div class="input-group" >
             <label>Motorista</label>
             <select id="newAbastDriver" required>${options}</select>
-        </div>
+        </div >
         <div class="input-group">
             <label>Data</label>
             <input type="date" id="newAbastDate" value="${new Date().toISOString().split('T')[0]}" required>
@@ -1577,7 +1708,7 @@ function showAddAbastecimentoModal() {
             <label>Comprovante de Abastecimento (Foto)</label>
             <input type="file" id="newAbastComprovante" accept=".png,.jpg,.jpeg" class="file-input">
         </div>
-    `, async () => {
+`, async () => {
         const formData = new FormData();
         formData.append('driver_id', document.getElementById('newAbastDriver').value);
         formData.append('date', document.getElementById('newAbastDate').value);
@@ -1590,9 +1721,9 @@ function showAddAbastecimentoModal() {
         }
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (token) headers['Authorization'] = `Bearer ${ token } `;
 
-        const response = await fetch(`${API_BASE}/admin/abastecimentos`, {
+        const response = await fetch(`${ API_BASE } /admin/abastecimentos`, {
             method: 'POST',
             headers,
             body: formData
@@ -1650,7 +1781,7 @@ function renderOutrosInsumosTable() {
     const pageItems = filtered.slice(start, end);
 
     // Update UI Controls
-    document.getElementById('outrosInsumosPageInfo').textContent = `Página ${pagination.outrosInsumos.page} de ${totalPages}`;
+    document.getElementById('outrosInsumosPageInfo').textContent = `Página ${ pagination.outrosInsumos.page } de ${ totalPages } `;
     document.getElementById('outrosInsumosPrevBtn').disabled = pagination.outrosInsumos.page === 1;
     document.getElementById('outrosInsumosNextBtn').disabled = pagination.outrosInsumos.page === totalPages;
 
@@ -1662,8 +1793,8 @@ function renderOutrosInsumosTable() {
             let statusCell;
             if (oi.total_value > 0) {
                 statusCell = isPaid
-                    ? `<span class="status-badge status-paid">Pago</span>`
-                    : `<span class="status-badge status-pending">Pendente</span>`;
+                    ? `< span class="status-badge status-paid" > Pago</span > `
+                    : `< span class="status-badge status-pending" > Pendente</span > `;
             } else {
                 statusCell = '<span class="text-muted">-</span>';
             }
@@ -1671,13 +1802,13 @@ function renderOutrosInsumosTable() {
             // Comprovante cell
             let comprovanteCell;
             if (oi.comprovante) {
-                comprovanteCell = `<a href="${oi.comprovante}" target="_blank" class="btn btn-sm btn-outline">📷</a>`;
+                comprovanteCell = `< a href = "${oi.comprovante}" target = "_blank" class="btn btn-sm btn-outline" >📷</a > `;
             } else {
                 comprovanteCell = '<span class="text-muted">-</span>';
             }
 
             return `
-                <tr>
+    < tr >
                     <td>${formatDate(oi.date)}</td>
                     <td>${formatNumber(oi.quantity)}</td>
                     <td>${oi.description || '-'}</td>
@@ -1686,18 +1817,18 @@ function renderOutrosInsumosTable() {
                     <td>${comprovanteCell}</td>
                     <td>${statusCell}</td>
                     <td><button class="btn btn-sm btn-outline" onclick="editOutrosInsumo(${oi.id})">Editar</button></td>
-                </tr>
-        `;
+                </tr >
+    `;
         }).join('');
 }
 
 function showAddOutrosInsumoModal() {
-    const options = drivers.map(d => `<option value="${d.id}">${d.name} (${d.plate})</option>`).join('');
+    const options = drivers.map(d => `< option value = "${d.id}" > ${ d.name } (${ d.plate })</option > `).join('');
     showModal('Novo Insumo', `
-        <div class="input-group">
+    < div class="input-group" >
             <label>Motorista</label>
             <select id="newOutrosDriver" required>${options}</select>
-        </div>
+        </div >
         <div class="input-group">
             <label>Data</label>
             <input type="date" id="newOutrosDate" value="${new Date().toISOString().split('T')[0]}" required>
@@ -1714,7 +1845,7 @@ function showAddOutrosInsumoModal() {
             <label>Preço Unitário</label>
             <input type="number" step="0.01" id="newOutrosPrice" value="0" required>
         </div>
-    `, async () => {
+`, async () => {
         await apiRequest('/admin/outrosinsumos', {
             method: 'POST',
             body: JSON.stringify({
@@ -1736,7 +1867,7 @@ window.editOutrosInsumo = async function (id) {
     if (!insumo) return;
 
     showModal('Editar Outros Insumos', `
-        <input type="hidden" id="editOutrosId" value="${id}">
+    < input type = "hidden" id = "editOutrosId" value = "${id}" >
         <div class="input-group">
             <label>Motorista</label>
             <input type="text" value="${insumo.driver_name || '-'}" disabled>
@@ -1762,7 +1893,7 @@ window.editOutrosInsumo = async function (id) {
             <input type="file" id="editOutrosComprovante" class="file-input" accept="image/png, image/jpeg">
             ${insumo.comprovante ? `<a href="${insumo.comprovante}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📷 Ver atual</a>` : ''}
         </div>
-    `, async () => {
+`, async () => {
         const formData = new FormData();
         formData.append('date', document.getElementById('editOutrosDate').value);
         formData.append('quantity', parseFloat(document.getElementById('editOutrosQuantity').value));
@@ -1773,9 +1904,9 @@ window.editOutrosInsumo = async function (id) {
         if (comprovanteFile) formData.append('comprovante', comprovanteFile);
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (token) headers['Authorization'] = `Bearer ${ token } `;
 
-        const response = await fetch(`${API_BASE}/admin/outrosinsumos/${id}`, {
+        const response = await fetch(`${ API_BASE } /admin/outrosinsumos / ${ id } `, {
             method: 'PUT',
             headers,
             body: formData
@@ -1790,9 +1921,9 @@ window.editOutrosInsumo = async function (id) {
     }, async () => {
         // Delete callback
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (token) headers['Authorization'] = `Bearer ${ token } `;
 
-        const response = await fetch(`${API_BASE}/admin/outrosinsumos/${id}`, {
+        const response = await fetch(`${ API_BASE } /admin/outrosinsumos / ${ id } `, {
             method: 'DELETE',
             headers
         });
@@ -1897,7 +2028,7 @@ function renderClientsTable() {
         : clientsList.map(c => {
             const lucroClass = c.lucro >= 0 ? 'value-positive' : 'value-negative';
             return `
-            <tr>
+    < tr >
                 <td><strong>🏢 ${c.name}</strong></td>
                 <td>${c.driverCount}</td>
                 <td>${c.freightCount}</td>
@@ -1905,8 +2036,8 @@ function renderClientsTable() {
                 <td>${c.toReceiveTotal > 0 ? formatCurrency(c.toReceiveTotal) : '-'}</td>
                 <td class="${lucroClass}">${formatCurrency(c.lucro)}</td>
                 <td><button class="btn btn-sm btn-outline" onclick="viewClientDetails('${encodeURIComponent(c.name)}')">Detalhes</button></td>
-            </tr>
-        `}).join('');
+            </tr >
+    `}).join('');
 }
 
 window.viewClientDetails = async function (clientName) {
@@ -1940,7 +2071,7 @@ window.viewClientDetails = async function (clientName) {
         document.getElementById('clientsListView').classList.add('hidden');
         document.getElementById('clientDetailView').classList.remove('hidden');
 
-        document.getElementById('clientDetailName').textContent = `🏢 ${decodedName}`;
+        document.getElementById('clientDetailName').textContent = `🏢 ${ decodedName } `;
         document.getElementById('clientDriverCount').textContent = driverIds.length;
         document.getElementById('clientFreightCount').textContent = clientFreights.length;
         document.getElementById('clientReceivedValue').textContent = formatCurrency(receivedTotal);
@@ -1955,21 +2086,21 @@ window.viewClientDetails = async function (clientName) {
             let recebimentoCell;
             if (f.comprovante_recebimento) {
                 recebimentoCell = `
-                    <a href="${f.comprovante_recebimento}" target="_blank" class="btn btn-sm btn-outline" title="Ver comprovante">📷</a>
-                    <label class="btn btn-sm btn-outline" style="cursor:pointer;margin-left:4px;" title="Substituir comprovante">
-                        📤
-                        <input type="file" accept="image/png,image/jpeg" style="display:none;" onchange="uploadRecebimento(${f.id}, this)">
-                    </label>`;
+    < a href = "${f.comprovante_recebimento}" target = "_blank" class="btn btn-sm btn-outline" title = "Ver comprovante" >📷</a >
+        <label class="btn btn-sm btn-outline" style="cursor:pointer;margin-left:4px;" title="Substituir comprovante">
+            📤
+            <input type="file" accept="image/png,image/jpeg" style="display:none;" onchange="uploadRecebimento(${f.id}, this)">
+        </label>`;
             } else {
                 recebimentoCell = `
-                    <label class="btn btn-sm btn-primary" style="cursor:pointer;" title="Anexar comprovante de recebimento">
+            < label class="btn btn-sm btn-primary" style = "cursor:pointer;" title = "Anexar comprovante de recebimento" >
                         📤
-                        <input type="file" accept="image/png,image/jpeg" style="display:none;" onchange="uploadRecebimento(${f.id}, this)">
-                    </label>`;
+<input type="file" accept="image/png,image/jpeg" style="display:none;" onchange="uploadRecebimento(${f.id}, this)">
+</label>`;
             }
 
             return `
-            <tr>
+    < tr >
                 <td>${formatDate(f.date)}</td>
                 <td>${f.driver_name}</td>
                 <td>${formatNumber(f.km)}</td>
@@ -1978,28 +2109,28 @@ window.viewClientDetails = async function (clientName) {
                 <td class="value-positive">${formatCurrency(valorTransp)}</td>
                 <td>${recebimentoCell}</td>
                 <td><input type="checkbox" class="paid-checkbox" ${isPaid ? 'checked' : ''} onchange="toggleClientPaid(${f.id})"></td>
-            </tr>
-        `}).join('') || '<tr><td colspan="8" style="text-align:center">Nenhum frete</td></tr>';
+            </tr >
+    `}).join('') || '<tr><td colspan="8" style="text-align:center">Nenhum frete</td></tr>';
 
         document.getElementById('clientAbastecimentosBody').innerHTML = clientAbast.map(a => `
-            <tr>
+    < tr >
                 <td>${formatDate(a.date)}</td>
                 <td>${a.driver_name}</td>
                 <td>${formatNumber(a.quantity)}</td>
                 <td>${formatCurrency(a.price_per_liter)}</td>
                 <td class="value-negative" style="white-space:nowrap;">-${formatCurrency(a.total_value)}</td>
-            </tr>
-        `).join('') || '<tr><td colspan="5" style="text-align:center">Nenhum abastecimento</td></tr>';
+            </tr >
+    `).join('') || '<tr><td colspan="5" style="text-align:center">Nenhum abastecimento</td></tr>';
 
         document.getElementById('clientOutrosInsumosBody').innerHTML = clientInsumos.map(oi => `
-            <tr>
+    < tr >
                 <td>${formatDate(oi.date)}</td>
                 <td>${formatNumber(oi.quantity)}</td>
                 <td>${oi.description || '-'}</td>
                 <td>${formatCurrency(oi.unit_price)}</td>
                 <td class="value-negative">-${formatCurrency(oi.total_value)}</td>
-            </tr>
-        `).join('') || '<tr><td colspan="5" style="text-align:center">Nenhum insumo</td></tr>';
+            </tr >
+    `).join('') || '<tr><td colspan="5" style="text-align:center">Nenhum insumo</td></tr>';
     } catch (error) {
         console.error('Load client details error:', error);
     }
@@ -2008,24 +2139,24 @@ window.viewClientDetails = async function (clientName) {
 // Toggle client_paid status for a freight (payment FROM client)
 window.toggleClientPaid = async function (freightId) {
     try {
-        await apiRequest(`/admin/freights/${freightId}/toggle-client-paid`, {
-            method: 'PATCH'
+        await apiRequest(`/ admin / freights / ${ freightId }/toggle-client-paid`, {
+method: 'PATCH'
         });
 
-        // Reload freights and re-render
-        await loadFreights();
+// Reload freights and re-render
+await loadFreights();
 
-        // Re-open the same client detail view to refresh totals
-        const clientName = document.getElementById('clientDetailName').textContent.replace('🏢 ', '');
-        if (clientName) {
-            viewClientDetails(encodeURIComponent(clientName));
-        }
+// Re-open the same client detail view to refresh totals
+const clientName = document.getElementById('clientDetailName').textContent.replace('🏢 ', '');
+if (clientName) {
+    viewClientDetails(encodeURIComponent(clientName));
+}
 
-        renderClientsTable();
+renderClientsTable();
     } catch (error) {
-        console.error('Toggle client paid error:', error);
-        alert('Erro ao atualizar pagamento: ' + error.message);
-    }
+    console.error('Toggle client paid error:', error);
+    alert('Erro ao atualizar pagamento: ' + error.message);
+}
 };
 
 // Upload comprovante de recebimento for a freight
@@ -3111,7 +3242,7 @@ async function loadAdminExtrato(driverId) {
     // Render Fretes table
     const fretesBody = document.getElementById('adminExtratoFretesBody');
     if (driverFreights.length === 0) {
-        fretesBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Nenhum frete encontrado</td></tr>';
+        fretesBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">Nenhum frete encontrado</td></tr>';
     } else {
         fretesBody.innerHTML = driverFreights.map(f => {
             const cargaCell = f.comprovante_carga
@@ -3120,9 +3251,11 @@ async function loadAdminExtrato(driverId) {
             const descargaCell = f.comprovante_descarga
                 ? `<a href="${f.comprovante_descarga}" target="_blank" class="btn btn-sm btn-outline">📷</a>`
                 : '<span class="text-muted">-</span>';
+            const plateDisplay = f.plate || f.driver_plate || '-';
             return `
                 <tr>
                     <td>${formatDate(f.date)}</td>
+                    <td><span class="plate-badge">${plateDisplay}</span></td>
                     <td>${formatNumber(f.km)}</td>
                     <td>${formatNumber(f.tons, 2)}</td>
                     <td class="value-positive">${formatCurrency(f.total_value)}</td>
@@ -3136,15 +3269,17 @@ async function loadAdminExtrato(driverId) {
     // Render Abastecimentos table
     const abastBody = document.getElementById('adminExtratoAbastBody');
     if (driverAbast.length === 0) {
-        abastBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Nenhum abastecimento encontrado</td></tr>';
+        abastBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Nenhum abastecimento encontrado</td></tr>';
     } else {
         abastBody.innerHTML = driverAbast.map(a => {
             const comprovanteCell = a.comprovante_abastecimento
                 ? `<a href="${a.comprovante_abastecimento}" target="_blank" class="btn btn-sm btn-outline">📷</a>`
                 : '<span class="text-muted">-</span>';
+            const plateDisplay = a.plate || a.driver_plate || '-';
             return `
                 <tr>
                     <td>${formatDate(a.date)}</td>
+                    <td><span class="plate-badge">${plateDisplay}</span></td>
                     <td>${formatNumber(a.quantity)}</td>
                     <td>${formatCurrency(a.price_per_liter)}</td>
                     <td class="value-negative" style="white-space:nowrap;">-${formatCurrency(a.total_value)}</td>
@@ -3221,4 +3356,34 @@ function init() {
     else showPage(loginPage);
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// ========================================
+// Password Toggle
+// ========================================
+
+function initPasswordToggle() {
+    document.querySelectorAll('.password-toggle').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const targetId = this.getAttribute('data-target');
+            const input = document.getElementById(targetId);
+            const eyeIcon = this.querySelector('.eye-icon img');
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                eyeIcon.src = 'eye-closed.png';
+                eyeIcon.alt = 'Hide password';
+                this.classList.add('active');
+            } else {
+                input.type = 'password';
+                eyeIcon.src = 'eye-open.png';
+                eyeIcon.alt = 'Show password';
+                this.classList.remove('active');
+            }
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    init();
+    initPasswordToggle();
+});
+

@@ -17,6 +17,7 @@ const loginPage = document.getElementById('loginPage');
 const dashboardPage = document.getElementById('dashboardPage');
 const extratoPage = document.getElementById('extratoPage');
 const waitingPage = document.getElementById('waitingPage');
+const platesPage = document.getElementById('platesPage');
 const loginForm = document.getElementById('loginForm');
 const signupForm = document.getElementById('signupForm');
 const loginFormElement = document.getElementById('loginFormElement');
@@ -163,10 +164,12 @@ function showPage(page) {
     dashboardPage.classList.remove('active');
     extratoPage.classList.remove('active');
     waitingPage.classList.remove('active');
+    if (platesPage) platesPage.classList.remove('active');
     loginPage.classList.add('hidden');
     dashboardPage.classList.add('hidden');
     extratoPage.classList.add('hidden');
     waitingPage.classList.add('hidden');
+    if (platesPage) platesPage.classList.add('hidden');
 
     page.classList.remove('hidden');
     page.classList.add('active');
@@ -230,21 +233,21 @@ async function handleSignup(e) {
     const name = document.getElementById('signupName').value.trim();
     const cpf = document.getElementById('signupCpf').value.trim();
     const phone = document.getElementById('signupPhone').value.trim();
-    const plate = document.getElementById('signupPlate').value.trim().toUpperCase();
     const password = document.getElementById('signupPassword').value;
 
-    // Collect additional plates
-    const additionalPlateInputs = document.querySelectorAll('.additional-plate-input');
-    const additional_plates = [];
-    additionalPlateInputs.forEach(input => {
+    // Collect plates (all optional now)
+    const plateInputs = document.querySelectorAll('.signup-plate-input');
+    const plates = [];
+    plateInputs.forEach(input => {
         const value = input.value.trim().toUpperCase();
         if (value) {
-            additional_plates.push(value);
+            plates.push(value);
         }
     });
 
-    if (!name || !cpf || !phone || !plate || !password) {
-        showError('Preencha todos os campos');
+    // Validate required fields (plates no longer required)
+    if (!name || !cpf || !phone || !password) {
+        showError('Preencha todos os campos obrigatórios');
         return;
     }
 
@@ -273,7 +276,7 @@ async function handleSignup(e) {
     try {
         const data = await apiRequest('/auth/driver/signup', {
             method: 'POST',
-            body: JSON.stringify({ name, plate, additional_plates, password, phone: phoneClean, cpf: cpfClean })
+            body: JSON.stringify({ name, plates, password, phone: phoneClean, cpf: cpfClean })
         });
 
         token = data.token;
@@ -433,7 +436,7 @@ async function loadExtratoFretes() {
         const freights = data.freights || [];
 
         if (freights.length === 0) {
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhum frete encontrado</td></tr>';
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Nenhum frete encontrado</td></tr>';
             return;
         }
 
@@ -444,10 +447,12 @@ async function loadExtratoFretes() {
             const descargaCell = f.comprovante_descarga
                 ? `<a href="${f.comprovante_descarga}" target="_blank" class="btn btn-outline btn-view">📷</a>`
                 : '<span class="text-muted">-</span>';
+            const plateDisplay = f.plate || f.driver_plate || '-';
 
             return `
                 <tr>
                     <td>${formatDate(f.date)}</td>
+                    <td><span class="plate-badge">${plateDisplay}</span></td>
                     <td>${formatNumber(f.km)}</td>
                     <td>${formatNumber(f.tons, 2)}</td>
                     <td class="value-positive">${formatCurrency(f.total_value)}</td>
@@ -458,7 +463,7 @@ async function loadExtratoFretes() {
         }).join('');
     } catch (error) {
         console.error('Freights error:', error);
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Erro ao carregar</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Erro ao carregar</td></tr>';
     }
 }
 
@@ -470,7 +475,7 @@ async function loadExtratoAbastecimentos() {
         const abastecimentos = data.abastecimentos || [];
 
         if (abastecimentos.length === 0) {
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nenhum abastecimento encontrado</td></tr>';
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhum abastecimento encontrado</td></tr>';
             return;
         }
 
@@ -478,10 +483,12 @@ async function loadExtratoAbastecimentos() {
             const comprovanteCell = a.comprovante_abastecimento
                 ? `<a href="${a.comprovante_abastecimento}" target="_blank" class="btn btn-outline btn-view">📷</a>`
                 : '<span class="text-muted">-</span>';
+            const plateDisplay = a.plate || a.driver_plate || '-';
 
             return `
                 <tr>
                     <td>${formatDate(a.date)}</td>
+                    <td><span class="plate-badge">${plateDisplay}</span></td>
                     <td>${formatNumber(a.quantity)} L</td>
                     <td>${formatCurrency(a.price_per_liter)}</td>
                     <td class="value-negative">-${formatCurrency(a.total_value)}</td>
@@ -491,7 +498,7 @@ async function loadExtratoAbastecimentos() {
         }).join('');
     } catch (error) {
         console.error('Abastecimentos error:', error);
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Erro ao carregar</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Erro ao carregar</td></tr>';
     }
 }
 
@@ -975,34 +982,131 @@ function formatPhoneInput(input) {
 }
 
 // ========================================
-// Additional Plates Management
+// Signup Plates Input Management
 // ========================================
 
 let plateCounter = 0;
 
 function addAdditionalPlateInput() {
     plateCounter++;
-    const container = document.getElementById('additionalPlatesList');
+    const container = document.getElementById('signupPlatesList');
+    if (!container) return;
+
     const div = document.createElement('div');
-    div.className = 'additional-plate-row';
-    div.id = `plateRow_${plateCounter}`;
+    div.className = 'signup-plate-row';
+    div.id = `signupPlateRow_${plateCounter}`;
     div.innerHTML = `
-        <input type="text" class="additional-plate-input" placeholder="ABC-1234" autocomplete="off">
-        <button type="button" class="btn btn-sm btn-remove-plate" onclick="removeAdditionalPlate('${plateCounter}')">✕</button>
+        <input type="text" class="signup-plate-input" placeholder="ABC-1234" autocomplete="off">
+        <button type="button" class="btn btn-sm btn-remove-plate" onclick="removeSignupPlate('${plateCounter}')">✕</button>
     `;
     container.appendChild(div);
 
     // Add formatting to the new input
-    const input = div.querySelector('.additional-plate-input');
+    const input = div.querySelector('.signup-plate-input');
     formatPlateInput(input);
 }
 
-window.removeAdditionalPlate = function (id) {
-    const row = document.getElementById(`plateRow_${id}`);
+window.removeSignupPlate = function (id) {
+    const row = document.getElementById(`signupPlateRow_${id}`);
     if (row) {
         row.remove();
     }
 };
+
+// ========================================
+// Driver Plate Management Page
+// ========================================
+
+async function showPlatesPage() {
+    showPage(platesPage);
+    await loadDriverPlates();
+}
+
+async function loadDriverPlates() {
+    const platesList = document.getElementById('driverPlatesList');
+    if (!platesList) return;
+
+    platesList.innerHTML = '<div class="loading">Carregando...</div>';
+
+    try {
+        const data = await apiRequest('/driver/plates');
+        const plates = data.plates || [];
+
+        if (plates.length === 0) {
+            platesList.innerHTML = '<div class="empty-plates">Nenhum veículo cadastrado</div>';
+            return;
+        }
+
+        platesList.innerHTML = plates.map(plate => `
+            <div class="plate-item glass">
+                <span class="plate-number">🚛 ${plate}</span>
+                <button class="btn btn-sm btn-outline btn-remove" onclick="removePlate('${plate}')">Remover</button>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Load plates error:', error);
+        platesList.innerHTML = '<div class="error">Erro ao carregar placas</div>';
+    }
+}
+
+async function addNewPlate() {
+    const input = document.getElementById('newPlateInput');
+    if (!input) return;
+
+    const plate = input.value.trim().toUpperCase();
+    if (!plate) {
+        showToast('Digite uma placa', 'error');
+        return;
+    }
+
+    // Validate plate format
+    const plateRegex = /^[A-Z]{3}-[0-9][A-Z0-9][0-9]{2}$/i;
+    if (!plateRegex.test(plate)) {
+        showToast('Formato de placa inválido. Use ABC-1234 ou ABC-1D23', 'error');
+        return;
+    }
+
+    try {
+        await apiRequest('/driver/plates', {
+            method: 'POST',
+            body: JSON.stringify({ plate })
+        });
+
+        input.value = '';
+        showToast('Placa adicionada com sucesso!', 'success');
+        await loadDriverPlates();
+
+        // Update userData to reflect new plates
+        const verifyData = await apiRequest('/auth/verify');
+        if (verifyData.valid) {
+            userData = verifyData.user;
+        }
+    } catch (error) {
+        showToast(error.message || 'Erro ao adicionar placa', 'error');
+    }
+}
+
+window.removePlate = async function (plate) {
+    if (!confirm(`Remover a placa ${plate}?`)) return;
+
+    try {
+        await apiRequest(`/driver/plates/${encodeURIComponent(plate)}`, {
+            method: 'DELETE'
+        });
+
+        showToast('Placa removida com sucesso!', 'success');
+        await loadDriverPlates();
+
+        // Update userData to reflect new plates
+        const verifyData = await apiRequest('/auth/verify');
+        if (verifyData.valid) {
+            userData = verifyData.user;
+        }
+    } catch (error) {
+        showToast(error.message || 'Erro ao remover placa', 'error');
+    }
+};
+
 
 // ========================================
 // Password Recovery
@@ -1249,6 +1353,42 @@ function init() {
 
     document.getElementById('btnExtrato').addEventListener('click', showExtrato);
 
+    // Plates management button
+    const btnPlates = document.getElementById('btnPlates');
+    if (btnPlates) {
+        btnPlates.addEventListener('click', showPlatesPage);
+    }
+
+    // Back to main from plates
+    const backToMainFromPlates = document.getElementById('backToMainFromPlates');
+    if (backToMainFromPlates) {
+        backToMainFromPlates.addEventListener('click', () => showPage(dashboardPage));
+    }
+
+    // Plates page logout
+    const platesLogoutBtn = document.getElementById('platesLogoutBtn');
+    if (platesLogoutBtn) {
+        platesLogoutBtn.addEventListener('click', logout);
+    }
+
+    // Add new plate button
+    const addNewPlateBtn = document.getElementById('addNewPlateBtn');
+    if (addNewPlateBtn) {
+        addNewPlateBtn.addEventListener('click', addNewPlate);
+    }
+
+    // Allow Enter key to add plate
+    const newPlateInput = document.getElementById('newPlateInput');
+    if (newPlateInput) {
+        newPlateInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addNewPlate();
+            }
+        });
+        formatPlateInput(newPlateInput);
+    }
+
     // Back to main from extrato
     document.getElementById('backToMain').addEventListener('click', () => {
         showPage(dashboardPage);
@@ -1304,9 +1444,9 @@ function init() {
         exportPdfBtn.addEventListener('click', exportExtratoPDF);
     }
 
-    // Format plate inputs
-    formatPlateInput(document.getElementById('loginPlate'));
-    formatPlateInput(document.getElementById('signupPlate'));
+    // Format plate inputs (loginPlate may not exist anymore)
+    const loginPlate = document.getElementById('loginPlate');
+    if (loginPlate) formatPlateInput(loginPlate);
 
     // Check for existing token
     if (token) {
@@ -1322,6 +1462,36 @@ function init() {
     }
 }
 
+// ========================================
+// Password Toggle
+// ========================================
+
+function initPasswordToggle() {
+    document.querySelectorAll('.password-toggle').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const targetId = this.getAttribute('data-target');
+            const input = document.getElementById(targetId);
+            const eyeIcon = this.querySelector('.eye-icon img');
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                eyeIcon.src = 'eye-closed.png';
+                eyeIcon.alt = 'Hide password';
+                this.classList.add('active');
+            } else {
+                input.type = 'password';
+                eyeIcon.src = 'eye-open.png';
+                eyeIcon.alt = 'Show password';
+                this.classList.remove('active');
+            }
+        });
+    });
+}
+
 // Start app
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+    init();
+    initPasswordToggle();
+});
+
 
