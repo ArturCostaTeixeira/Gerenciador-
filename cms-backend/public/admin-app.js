@@ -1269,7 +1269,7 @@ window.editFreight = async function (id) {
                 const plates = getDriverPlates(selectedDriver);
 
                 plateSelect.innerHTML = plates.length > 0
-                    ? plates.map(p => `< option value = "${p}" > ${p}</option > `).join('')
+                    ? plates.map(p => `<option value="${p}">${p}</option>`).join('')
                     : '<option value="">Nenhuma placa</option>';
             });
         }
@@ -1277,17 +1277,17 @@ window.editFreight = async function (id) {
 };
 
 function showAddFreightModal() {
-    const driverOptions = drivers.map(d => `< option value = "${d.id}" > ${d.name}(${d.plate})</option > `).join('');
+    const driverOptions = drivers.map(d => `<option value="${d.id}">${d.name} (${d.plate})</option>`).join('');
     const uniqueClients = [...new Set(drivers.filter(d => d.client).map(d => d.client))];
     const clientOptions = '<option value="">Selecione um cliente</option>' +
-        clients.map(c => `< option value = "${c.client}" > ${c.client}</option > `).join('') +
-        uniqueClients.filter(c => !clients.some(cl => cl.client === c)).map(c => `< option value = "${c}" > ${c}</option > `).join('');
+        clients.map(c => `<option value="${c.client}">${c.client}</option>`).join('') +
+        uniqueClients.filter(c => !clients.some(cl => cl.client === c)).map(c => `<option value="${c}">${c}</option>`).join('');
 
     showModal('Novo Frete', `
-    < div class= "input-group" >
+        <div class="input-group">
             <label>Motorista</label>
             <select id="newFreightDriver" required>${driverOptions}</select>
-        </div >
+        </div>
         <div class="input-group">
             <label>Cliente</label>
             <select id="newFreightClient" required>${clientOptions}</select>
@@ -1418,42 +1418,41 @@ function renderAbastecimentosTable() {
             if (a.comprovante_abastecimento) {
                 // Already has a comprovante assigned - show view link and option to change
                 comprovanteCell = `
-    < div class= "descarga-dropdown" >
+                    <div class="descarga-dropdown">
                         <a href="${a.comprovante_abastecimento}" target="_blank" class="btn btn-sm btn-outline">📷</a>
                         <button class="btn btn-sm btn-outline" onclick="showAbastComprovanteDropdown(${a.id}, event)">⚙️</button>
-                    </div >
-        `;
+                    </div>
+                `;
             } else {
                 // No comprovante - show dropdown to select one
                 comprovanteCell = `
-        < select class= "descarga-select" onchange = "assignAbastComprovante(${a.id}, this.value)" data - abast - id="${a.id}" >
-    <option value="">Selecionar...</option>
+                    <select class="descarga-select" onchange="assignAbastComprovante(${a.id}, this.value)" data-abast-id="${a.id}">
+                        <option value="">Selecionar...</option>
                         ${unassignedComprovantesAbast.map(c =>
                     `<option value="${c.id}">${c.display_name}</option>`
-                ).join('')
-                    }
-                    </select >
-        `;
+                ).join('')}
+                    </select>
+                `;
             }
 
             // Action button - Completar for pending, Editar for complete
             const actionBtn = isPending
-                ? `< button class= "btn btn-sm btn-primary" onclick = "editAbastecimento(${a.id})" > Completar</button > `
-                : `< button class= "btn btn-sm btn-outline" onclick = "editAbastecimento(${a.id})" > Editar</button > `;
+                ? `<button class="btn btn-sm btn-primary" onclick="editAbastecimento(${a.id})">Completar</button>`
+                : `<button class="btn btn-sm btn-outline" onclick="editAbastecimento(${a.id})">Editar</button>`;
 
             // Status badge for paid status
             const isPaid = a.paid === 1 || a.paid === true;
             let statusCell;
             if (!isPending && a.total_value > 0) {
                 statusCell = isPaid
-                    ? `< span class= "status-badge status-paid" > Pago</span > `
-                    : `< span class= "status-badge status-pending" > Pendente</span > `;
+                    ? `<span class="status-badge status-paid">Pago</span>`
+                    : `<span class="status-badge status-pending">Pendente</span>`;
             } else {
                 statusCell = '<span class="text-muted">-</span>';
             }
 
             return `
-    < tr class= "${isPending ? 'row-pending' : ''}" >
+                <tr class="${isPending ? 'row-pending' : ''}">
                     <td>${formatDate(a.date)}</td>
                     <td>${a.driver_name || driver?.name || '-'}</td>
                     <td>${a.driver_plate || driver?.plate || '-'}</td>
@@ -1464,8 +1463,8 @@ function renderAbastecimentosTable() {
                     <td>${comprovanteCell}</td>
                     <td>${statusCell}</td>
                     <td>${actionBtn}</td>
-                </tr >
-        `;
+                </tr>
+            `;
         }).join('');
 }
 
@@ -1500,7 +1499,7 @@ window.showAbastComprovanteDropdown = function (abastecimentoId, event) {
     const popup = document.createElement('div');
     popup.className = 'descarga-popup glass';
     popup.innerHTML = `
-    < div class= "descarga-popup-content" >
+        <div class="descarga-popup-content">
             <p style="margin-bottom: 0.5rem; font-weight: 600;">Alterar Comprovante</p>
             <select id="abastComprovantePopupSelect" class="filter-input" style="margin-bottom: 0.5rem;">
                 <option value="">Selecionar novo...</option>
@@ -1513,8 +1512,8 @@ window.showAbastComprovanteDropdown = function (abastecimentoId, event) {
                 <button class="btn btn-sm btn-outline" onclick="unassignAbastComprovante(${abastecimentoId})">Remover</button>
                 <button class="btn btn-sm btn-outline" onclick="closeDescargaPopup()">Cancelar</button>
             </div>
-        </div >
-        `;
+        </div>
+    `;
 
     document.body.appendChild(popup);
 
@@ -1560,11 +1559,11 @@ window.editAbastecimento = async function (id) {
 
     const allClients = [...new Set(clients.map(c => c.client))];
     const clientOptions = '<option value="">(Opcional) Selecione um cliente</option>' +
-        allClients.map(c => `< option value = "${c}" ${abastecimento.client === c ? 'selected' : ''} > ${c}</option > `).join('');
+        allClients.map(c => `<option value="${c}" ${abastecimento.client === c ? 'selected' : ''}>${c}</option>`).join('');
 
     // Build driver options dropdown
     const driverOptions = drivers.map(d =>
-        `< option value = "${d.id}" ${abastecimento.driver_id === d.id ? 'selected' : ''} > ${d.name}</option > `
+        `<option value="${d.id}" ${abastecimento.driver_id === d.id ? 'selected' : ''}>${d.name}</option>`
     ).join('');
 
     // Get plates for the current driver
@@ -1591,11 +1590,11 @@ window.editAbastecimento = async function (id) {
 
     const currentDriverPlates = getDriverPlates(currentDriver);
     const plateOptions = currentDriverPlates.map(p =>
-        `< option value = "${p}" ${currentPlate === p ? 'selected' : ''} > ${p}</option > `
+        `<option value="${p}" ${currentPlate === p ? 'selected' : ''}>${p}</option>`
     ).join('') || '<option value="">Nenhuma placa</option>';
 
     showModal(title, `
-    < input type = "hidden" id = "editAbastId" value = "${id}" >
+        <input type="hidden" id="editAbastId" value="${id}">
         <div class="input-group">
             <label>Motorista</label>
             <select id="editAbastDriver" required>${driverOptions}</select>
@@ -1683,7 +1682,7 @@ window.editAbastecimento = async function (id) {
                 const plates = getDriverPlates(selectedDriver);
 
                 plateSelect.innerHTML = plates.length > 0
-                    ? plates.map(p => `< option value = "${p}" > ${p}</option > `).join('')
+                    ? plates.map(p => `<option value="${p}">${p}</option>`).join('')
                     : '<option value="">Nenhuma placa</option>';
             });
         }
@@ -1691,12 +1690,12 @@ window.editAbastecimento = async function (id) {
 };
 
 function showAddAbastecimentoModal() {
-    const options = drivers.map(d => `< option value = "${d.id}" > ${d.name} (${d.plate})</option > `).join('');
+    const options = drivers.map(d => `<option value="${d.id}">${d.name} (${d.plate})</option>`).join('');
     showModal('Novo Abastecimento', `
-    < div class="input-group" >
+        <div class="input-group">
             <label>Motorista</label>
             <select id="newAbastDriver" required>${options}</select>
-        </div >
+        </div>
         <div class="input-group">
             <label>Data</label>
             <input type="date" id="newAbastDate" value="${new Date().toISOString().split('T')[0]}" required>
@@ -1798,8 +1797,8 @@ function renderOutrosInsumosTable() {
             let statusCell;
             if (oi.total_value > 0) {
                 statusCell = isPaid
-                    ? `< span class="status-badge status-paid" > Pago</span > `
-                    : `< span class="status-badge status-pending" > Pendente</span > `;
+                    ? `<span class="status-badge status-paid">Pago</span>`
+                    : `<span class="status-badge status-pending">Pendente</span>`;
             } else {
                 statusCell = '<span class="text-muted">-</span>';
             }
@@ -1807,13 +1806,13 @@ function renderOutrosInsumosTable() {
             // Comprovante cell
             let comprovanteCell;
             if (oi.comprovante) {
-                comprovanteCell = `< a href = "${oi.comprovante}" target = "_blank" class="btn btn-sm btn-outline" >📷</a > `;
+                comprovanteCell = `<a href="${oi.comprovante}" target="_blank" class="btn btn-sm btn-outline">📷</a>`;
             } else {
                 comprovanteCell = '<span class="text-muted">-</span>';
             }
 
             return `
-    < tr >
+                <tr>
                     <td>${formatDate(oi.date)}</td>
                     <td>${formatNumber(oi.quantity)}</td>
                     <td>${oi.description || '-'}</td>
@@ -1822,18 +1821,18 @@ function renderOutrosInsumosTable() {
                     <td>${comprovanteCell}</td>
                     <td>${statusCell}</td>
                     <td><button class="btn btn-sm btn-outline" onclick="editOutrosInsumo(${oi.id})">Editar</button></td>
-                </tr >
-    `;
+                </tr>
+            `;
         }).join('');
 }
 
 function showAddOutrosInsumoModal() {
-    const options = drivers.map(d => `< option value = "${d.id}" > ${d.name} (${d.plate})</option > `).join('');
+    const options = drivers.map(d => `<option value="${d.id}">${d.name} (${d.plate})</option>`).join('');
     showModal('Novo Insumo', `
-    < div class="input-group" >
+        <div class="input-group">
             <label>Motorista</label>
             <select id="newOutrosDriver" required>${options}</select>
-        </div >
+        </div>
         <div class="input-group">
             <label>Data</label>
             <input type="date" id="newOutrosDate" value="${new Date().toISOString().split('T')[0]}" required>
@@ -1872,7 +1871,7 @@ window.editOutrosInsumo = async function (id) {
     if (!insumo) return;
 
     showModal('Editar Outros Insumos', `
-    < input type = "hidden" id = "editOutrosId" value = "${id}" >
+        <input type="hidden" id="editOutrosId" value="${id}">
         <div class="input-group">
             <label>Motorista</label>
             <input type="text" value="${insumo.driver_name || '-'}" disabled>
@@ -2033,16 +2032,16 @@ function renderClientsTable() {
         : clientsList.map(c => {
             const lucroClass = c.lucro >= 0 ? 'value-positive' : 'value-negative';
             return `
-    < tr >
-                <td><strong>🏢 ${c.name}</strong></td>
-                <td>${c.driverCount}</td>
-                <td>${c.freightCount}</td>
-                <td class="value-positive">${formatCurrency(c.receivedTotal)}</td>
-                <td>${c.toReceiveTotal > 0 ? formatCurrency(c.toReceiveTotal) : '-'}</td>
-                <td class="${lucroClass}">${formatCurrency(c.lucro)}</td>
-                <td><button class="btn btn-sm btn-outline" onclick="viewClientDetails('${encodeURIComponent(c.name)}')">Detalhes</button></td>
-            </tr >
-    `}).join('');
+                <tr>
+                    <td><strong>🏢 ${c.name}</strong></td>
+                    <td>${c.driverCount}</td>
+                    <td>${c.freightCount}</td>
+                    <td class="value-positive">${formatCurrency(c.receivedTotal)}</td>
+                    <td>${c.toReceiveTotal > 0 ? formatCurrency(c.toReceiveTotal) : '-'}</td>
+                    <td class="${lucroClass}">${formatCurrency(c.lucro)}</td>
+                    <td><button class="btn btn-sm btn-outline" onclick="viewClientDetails('${encodeURIComponent(c.name)}')">Detalhes</button></td>
+                </tr>
+            `}).join('');
 }
 
 window.viewClientDetails = async function (clientName) {
@@ -2091,51 +2090,51 @@ window.viewClientDetails = async function (clientName) {
             let recebimentoCell;
             if (f.comprovante_recebimento) {
                 recebimentoCell = `
-    < a href = "${f.comprovante_recebimento}" target = "_blank" class="btn btn-sm btn-outline" title = "Ver comprovante" >📷</a >
-        <label class="btn btn-sm btn-outline" style="cursor:pointer;margin-left:4px;" title="Substituir comprovante">
-            📤
-            <input type="file" accept="image/png,image/jpeg" style="display:none;" onchange="uploadRecebimento(${f.id}, this)">
-        </label>`;
+                    <a href="${f.comprovante_recebimento}" target="_blank" class="btn btn-sm btn-outline" title="Ver comprovante">📷</a>
+                    <label class="btn btn-sm btn-outline" style="cursor:pointer;margin-left:4px;" title="Substituir comprovante">
+                        📤
+                        <input type="file" accept="image/png,image/jpeg" style="display:none;" onchange="uploadRecebimento(${f.id}, this)">
+                    </label>`;
             } else {
                 recebimentoCell = `
-            < label class="btn btn-sm btn-primary" style = "cursor:pointer;" title = "Anexar comprovante de recebimento" >
+                    <label class="btn btn-sm btn-primary" style="cursor:pointer;" title="Anexar comprovante de recebimento">
                         📤
-<input type="file" accept="image/png,image/jpeg" style="display:none;" onchange="uploadRecebimento(${f.id}, this)">
-</label>`;
+                        <input type="file" accept="image/png,image/jpeg" style="display:none;" onchange="uploadRecebimento(${f.id}, this)">
+                    </label>`;
             }
 
             return `
-    < tr >
-                <td>${formatDate(f.date)}</td>
-                <td>${f.driver_name}</td>
-                <td>${formatNumber(f.km)}</td>
-                <td>${formatNumber(f.tons, 2)}</td>
-                <td>${formatPricePerKmTon(precoTransp)}</td>
-                <td class="value-positive">${formatCurrency(valorTransp)}</td>
-                <td>${recebimentoCell}</td>
-                <td><input type="checkbox" class="paid-checkbox" ${isPaid ? 'checked' : ''} onchange="toggleClientPaid(${f.id})"></td>
-            </tr >
-    `}).join('') || '<tr><td colspan="8" style="text-align:center">Nenhum frete</td></tr>';
+                <tr>
+                    <td>${formatDate(f.date)}</td>
+                    <td>${f.driver_name}</td>
+                    <td>${formatNumber(f.km)}</td>
+                    <td>${formatNumber(f.tons, 2)}</td>
+                    <td>${formatPricePerKmTon(precoTransp)}</td>
+                    <td class="value-positive">${formatCurrency(valorTransp)}</td>
+                    <td>${recebimentoCell}</td>
+                    <td><input type="checkbox" class="paid-checkbox" ${isPaid ? 'checked' : ''} onchange="toggleClientPaid(${f.id})"></td>
+                </tr>
+            `}).join('') || '<tr><td colspan="8" style="text-align:center">Nenhum frete</td></tr>';
 
         document.getElementById('clientAbastecimentosBody').innerHTML = clientAbast.map(a => `
-    < tr >
+            <tr>
                 <td>${formatDate(a.date)}</td>
                 <td>${a.driver_name}</td>
                 <td>${formatNumber(a.quantity)}</td>
                 <td>${formatCurrency(a.price_per_liter)}</td>
                 <td class="value-negative" style="white-space:nowrap;">-${formatCurrency(a.total_value)}</td>
-            </tr >
-    `).join('') || '<tr><td colspan="5" style="text-align:center">Nenhum abastecimento</td></tr>';
+            </tr>
+        `).join('') || '<tr><td colspan="5" style="text-align:center">Nenhum abastecimento</td></tr>';
 
         document.getElementById('clientOutrosInsumosBody').innerHTML = clientInsumos.map(oi => `
-    < tr >
+            <tr>
                 <td>${formatDate(oi.date)}</td>
                 <td>${formatNumber(oi.quantity)}</td>
                 <td>${oi.description || '-'}</td>
                 <td>${formatCurrency(oi.unit_price)}</td>
                 <td class="value-negative">-${formatCurrency(oi.total_value)}</td>
-            </tr >
-    `).join('') || '<tr><td colspan="5" style="text-align:center">Nenhum insumo</td></tr>';
+            </tr>
+        `).join('') || '<tr><td colspan="5" style="text-align:center">Nenhum insumo</td></tr>';
     } catch (error) {
         console.error('Load client details error:', error);
     }
