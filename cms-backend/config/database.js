@@ -302,6 +302,14 @@ async function initDatabase() {
         // Column already exists, ignore
     }
 
+    // Add plate column to freights for tracking which truck transported the cargo
+    try {
+        await exec(`ALTER TABLE freights ADD COLUMN plate TEXT`);
+        console.log('Added plate column to freights');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
     // Create default admin if not exists
     const adminExists = await queryOne('SELECT id FROM admins WHERE username = ?', ['admin']);
     if (!adminExists) {

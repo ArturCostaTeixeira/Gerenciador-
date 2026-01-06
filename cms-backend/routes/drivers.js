@@ -104,11 +104,27 @@ router.put('/:id', async (req, res) => {
             return res.status(404).json({ error: 'Driver not found' });
         }
 
-        const { name, plate, price_per_km_ton, client, active } = req.body;
+        const { name, cpf, phone, plate, plates, price_per_km_ton, client, active } = req.body;
         const updates = {};
 
         if (name !== undefined) {
             updates.name = name.trim();
+        }
+
+        if (cpf !== undefined) {
+            const cpfClean = cpf.replace(/\D/g, '');
+            if (cpfClean.length === 11) {
+                // Check if CPF belongs to another driver
+                const existingCpf = await Driver.findByCpf(cpfClean);
+                if (existingCpf && existingCpf.id !== parseInt(req.params.id)) {
+                    return res.status(409).json({ error: 'CPF já cadastrado para outro motorista' });
+                }
+                updates.cpf = cpfClean;
+            }
+        }
+
+        if (phone !== undefined) {
+            updates.phone = phone ? phone.replace(/\D/g, '') : null;
         }
 
         if (plate !== undefined) {
@@ -124,6 +140,16 @@ router.put('/:id', async (req, res) => {
                 return res.status(409).json({ error: 'Plate already registered to another driver' });
             }
             updates.plate = normalizedPlate;
+        }
+
+        if (plates !== undefined) {
+            // Validate and normalize additional plates
+            if (plates && Array.isArray(plates)) {
+                const normalizedPlates = plates.map(p => normalizePlate(p)).filter(p => p);
+                updates.plates = JSON.stringify(normalizedPlates);
+            } else {
+                updates.plates = null;
+            }
         }
 
         if (price_per_km_ton !== undefined) {

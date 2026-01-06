@@ -186,6 +186,18 @@ const Driver = {
         if (!bcrypt.compareSync(password, driver.password)) return null;
 
         return driver;
+    },
+
+    /**
+     * Update driver password
+     * @param {number} id - Driver ID
+     * @param {string} newPassword - New plain text password
+     * @returns {Object|null} - Updated driver or null
+     */
+    async updatePassword(id, newPassword) {
+        const hashedPassword = bcrypt.hashSync(newPassword, 10);
+        await execute('UPDATE drivers SET password = ? WHERE id = ?', [hashedPassword, id]);
+        return this.findById(id);
     }
 };
 

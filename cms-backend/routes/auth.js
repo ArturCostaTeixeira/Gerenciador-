@@ -5,6 +5,7 @@ const Admin = require('../models/admin');
 const Abastecedor = require('../models/abastecedor');
 const { isValidPlate, normalizePlate, isValidCPF } = require('../utils/validators');
 const { generateToken, verifyToken } = require('../middleware/auth');
+const { sendVerificationCode, verifyCode } = require('../utils/twilioService');
 
 /**
  * POST /api/auth/driver/signup
@@ -320,5 +321,254 @@ router.get('/verify', async (req, res) => {
     });
 });
 
+/**
+ * POST /api/auth/driver/forgot-password
+ * Request password reset - sends SMS code to driver's phone
+ */
+router.post('/driver/forgot-password', async (req, res) => {
+    try {
+        const { cpf } = req.body;
+
+        if (!cpf) {
+            return res.status(400).json({ error: 'CPF é obrigatório' });
+        }
+
+        // Clean CPF
+        const cleanCpf = cpf.replace(/\D/g, '');
+        if (cleanCpf.length !== 11) {
+            return res.status(400).json({ error: 'CPF inválido' });
+        }
+
+        // Find driver by CPF
+        const driver = await Driver.findByCpf(cleanCpf);
+        if (!driver) {
+            return res.status(404).json({ error: 'CPF não cadastrado' });
+        }
+
+        if (!driver.phone) {
+            return res.status(400).json({ error: 'Motorista não possui telefone cadastrado' });
+        }
+
+        // Send verification code via Twilio
+        await sendVerificationCode(driver.phone);
+
+        // Mask phone number for response (show only last 4 digits)
+        const maskedPhone = '***' + driver.phone.slice(-4);
+
+        res.json({
+            success: true,
+            message: 'Código enviado por SMS',
+            phone: maskedPhone
+        });
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ error: 'Erro ao enviar código. Tente novamente.' });
+    }
+});
+
+/**
+ * POST /api/auth/driver/verify-reset-code
+ * Verify the SMS code
+ */
+router.post('/driver/verify-reset-code', async (req, res) => {
+    try {
+        const { cpf, code } = req.body;
+
+        if (!cpf || !code) {
+            return res.status(400).json({ error: 'CPF e código são obrigatórios' });
+        }
+
+        // Clean CPF
+        const cleanCpf = cpf.replace(/\D/g, '');
+
+        // Find driver
+        const driver = await Driver.findByCpf(cleanCpf);
+        if (!driver) {
+            return res.status(404).json({ error: 'CPF não encontrado' });
+        }
+
+        // Verify code with Twilio
+        const result = await verifyCode(driver.phone, code);
+
+        if (!result.valid) {
+            return res.status(400).json({ error: 'Código inválido ou expirado' });
+        }
+
+        res.json({
+            valid: true,
+            message: 'Código verificado com sucesso'
+        });
+    } catch (error) {
+        console.error('Verify reset code error:', error);
+        res.status(500).json({ error: 'Erro ao verificar código' });
+    }
+});
+
+/**
+ * POST /api/auth/driver/reset-password
+ * Reset password after code verification
+ * Note: Code was already verified in verify-reset-code step
+ */
+router.post('/driver/reset-password', async (req, res) => {
+    try {
+        const { cpf, newPassword } = req.body;
+
+        if (!cpf || !newPassword) {
+            return res.status(400).json({ error: 'CPF e nova senha são obrigatórios' });
+        }
+
+        if (newPassword.length < 4) {
+            return res.status(400).json({ error: 'Senha deve ter pelo menos 4 caracteres' });
+        }
+
+        // Clean CPF
+        const cleanCpf = cpf.replace(/\D/g, '');
+
+        // Find driver
+        const driver = await Driver.findByCpf(cleanCpf);
+        if (!driver) {
+            return res.status(404).json({ error: 'CPF não encontrado' });
+        }
+
+        // Update password (code was already verified in previous step)
+        await Driver.updatePassword(driver.id, newPassword);
+
+        res.json({
+            success: true,
+            message: 'Senha alterada com sucesso'
+        });
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ error: 'Erro ao alterar senha' });
+    }
+});
+
+// ========================================
+// Abastecedor Password Reset Endpoints
+// ========================================
+
+/**
+ * POST /api/auth/abastecedor/forgot-password
+ * Request password reset - sends SMS code to abastecedor's phone
+ */
+router.post('/abastecedor/forgot-password', async (req, res) => {
+    try {
+        const { cpf } = req.body;
+
+        if (!cpf) {
+            return res.status(400).json({ error: 'CPF é obrigatório' });
+        }
+
+        // Clean CPF
+        const cleanCpf = cpf.replace(/\D/g, '');
+        if (cleanCpf.length !== 11) {
+            return res.status(400).json({ error: 'CPF inválido' });
+        }
+
+        // Find abastecedor by CPF
+        const abastecedor = await Abastecedor.findByCpf(cleanCpf);
+        if (!abastecedor) {
+            return res.status(404).json({ error: 'CPF não cadastrado' });
+        }
+
+        if (!abastecedor.phone) {
+            return res.status(400).json({ error: 'Abastecedor não possui telefone cadastrado' });
+        }
+
+        // Send verification code via Twilio
+        await sendVerificationCode(abastecedor.phone);
+
+        // Mask phone number for response (show only last 4 digits)
+        const maskedPhone = '***' + abastecedor.phone.slice(-4);
+
+        res.json({
+            success: true,
+            message: 'Código enviado por SMS',
+            phone: maskedPhone
+        });
+    } catch (error) {
+        console.error('Abastecedor forgot password error:', error);
+        res.status(500).json({ error: 'Erro ao enviar código. Tente novamente.' });
+    }
+});
+
+/**
+ * POST /api/auth/abastecedor/verify-reset-code
+ * Verify the SMS code
+ */
+router.post('/abastecedor/verify-reset-code', async (req, res) => {
+    try {
+        const { cpf, code } = req.body;
+
+        if (!cpf || !code) {
+            return res.status(400).json({ error: 'CPF e código são obrigatórios' });
+        }
+
+        // Clean CPF
+        const cleanCpf = cpf.replace(/\D/g, '');
+
+        // Find abastecedor
+        const abastecedor = await Abastecedor.findByCpf(cleanCpf);
+        if (!abastecedor) {
+            return res.status(404).json({ error: 'CPF não encontrado' });
+        }
+
+        // Verify code with Twilio
+        const result = await verifyCode(abastecedor.phone, code);
+
+        if (!result.valid) {
+            return res.status(400).json({ error: 'Código inválido ou expirado' });
+        }
+
+        res.json({
+            valid: true,
+            message: 'Código verificado com sucesso'
+        });
+    } catch (error) {
+        console.error('Abastecedor verify reset code error:', error);
+        res.status(500).json({ error: 'Erro ao verificar código' });
+    }
+});
+
+/**
+ * POST /api/auth/abastecedor/reset-password
+ * Reset password after code verification
+ * Note: Code was already verified in verify-reset-code step
+ */
+router.post('/abastecedor/reset-password', async (req, res) => {
+    try {
+        const { cpf, newPassword } = req.body;
+
+        if (!cpf || !newPassword) {
+            return res.status(400).json({ error: 'CPF e nova senha são obrigatórios' });
+        }
+
+        if (newPassword.length < 4) {
+            return res.status(400).json({ error: 'Senha deve ter pelo menos 4 caracteres' });
+        }
+
+        // Clean CPF
+        const cleanCpf = cpf.replace(/\D/g, '');
+
+        // Find abastecedor
+        const abastecedor = await Abastecedor.findByCpf(cleanCpf);
+        if (!abastecedor) {
+            return res.status(404).json({ error: 'CPF não encontrado' });
+        }
+
+        // Update password (code was already verified in previous step)
+        await Abastecedor.updatePassword(abastecedor.id, newPassword);
+
+        res.json({
+            success: true,
+            message: 'Senha alterada com sucesso'
+        });
+    } catch (error) {
+        console.error('Abastecedor reset password error:', error);
+        res.status(500).json({ error: 'Erro ao alterar senha' });
+    }
+});
+
 module.exports = router;
+
 

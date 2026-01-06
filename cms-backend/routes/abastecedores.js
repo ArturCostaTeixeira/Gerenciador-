@@ -104,11 +104,23 @@ router.put('/:id', async (req, res) => {
             return res.status(404).json({ error: 'Abastecedor not found' });
         }
 
-        const { name, phone, active } = req.body;
+        const { name, cpf, phone, active } = req.body;
         const updates = {};
 
         if (name !== undefined) {
             updates.name = name.trim();
+        }
+
+        if (cpf !== undefined) {
+            const cpfClean = cpf.replace(/\D/g, '');
+            if (cpfClean.length === 11) {
+                // Check if CPF belongs to another abastecedor
+                const existingCpf = await Abastecedor.findByCpf(cpfClean);
+                if (existingCpf && existingCpf.id !== parseInt(req.params.id)) {
+                    return res.status(409).json({ error: 'CPF já cadastrado para outro abastecedor' });
+                }
+                updates.cpf = cpfClean;
+            }
         }
 
         if (phone !== undefined) {

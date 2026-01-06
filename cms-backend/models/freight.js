@@ -286,6 +286,11 @@ const Freight = {
      * @returns {boolean} - Success
      */
     async delete(id) {
+        // First delete related records to avoid foreign key constraints
+        await execute('DELETE FROM comprovantes_carga WHERE assigned_freight_id = ?', [id]);
+        await execute('DELETE FROM comprovantes_descarga WHERE assigned_freight_id = ?', [id]);
+
+        // Now delete the freight
         const result = await execute('DELETE FROM freights WHERE id = ?', [id]);
         return result.changes > 0;
     }

@@ -12,6 +12,9 @@ let currentCameraType = null; // 'abast' or 'insumo'
 let capturedPhotoData = null;
 let driversData = []; // Store drivers for dropdown
 
+// Password reset state
+let resetCpf = null;
+
 // DOM Elements
 const loginPage = document.getElementById('loginPage');
 const dashboardPage = document.getElementById('dashboardPage');
@@ -200,10 +203,168 @@ function logout() {
     userData = null;
     localStorage.removeItem('abastecedor_token');
     showPage('loginPage');
+    showLoginForm();
 
     // Clear forms
     loginFormElement.reset();
     hideError();
+}
+
+// ========================================
+// Password Recovery Functions
+// ========================================
+
+function showLoginForm() {
+    document.getElementById('loginForm').classList.remove('hidden');
+    document.getElementById('forgotPasswordForm').classList.add('hidden');
+    document.getElementById('verifyCodeForm').classList.add('hidden');
+    document.getElementById('resetPasswordForm').classList.add('hidden');
+    hideError();
+}
+
+function showForgotPasswordForm() {
+    document.getElementById('loginForm').classList.add('hidden');
+    document.getElementById('forgotPasswordForm').classList.remove('hidden');
+    document.getElementById('verifyCodeForm').classList.add('hidden');
+    document.getElementById('resetPasswordForm').classList.add('hidden');
+    hideError();
+}
+
+function showVerifyCodeForm(phone) {
+    document.getElementById('loginForm').classList.add('hidden');
+    document.getElementById('forgotPasswordForm').classList.add('hidden');
+    document.getElementById('verifyCodeForm').classList.remove('hidden');
+    document.getElementById('resetPasswordForm').classList.add('hidden');
+    document.getElementById('verifyCodeSubtitle').textContent = `Código enviado para ${phone}`;
+    hideError();
+}
+
+function showResetPasswordForm() {
+    document.getElementById('loginForm').classList.add('hidden');
+    document.getElementById('forgotPasswordForm').classList.add('hidden');
+    document.getElementById('verifyCodeForm').classList.add('hidden');
+    document.getElementById('resetPasswordForm').classList.remove('hidden');
+    hideError();
+}
+
+async function handleForgotPassword(e) {
+    e.preventDefault();
+    const form = document.getElementById('forgotPasswordFormElement');
+    const button = form.querySelector('button[type="submit"]');
+    const cpf = document.getElementById('forgotCpf').value.trim();
+
+    if (!cpf) {
+        showError('CPF é obrigatório');
+        return;
+    }
+
+    setLoading(button, true);
+    hideError();
+
+    try {
+        const response = await apiRequest('/auth/abastecedor/forgot-password', {
+            method: 'POST',
+            body: { cpf }
+        });
+
+        resetCpf = cpf;
+        showVerifyCodeForm(response.phone);
+        showToast('Código enviado por SMS!', 'success');
+    } catch (error) {
+        showError(error.message);
+    } finally {
+        setLoading(button, false);
+    }
+}
+
+async function handleVerifyCode(e) {
+    e.preventDefault();
+    const form = document.getElementById('verifyCodeFormElement');
+    const button = form.querySelector('button[type="submit"]');
+    const code = document.getElementById('verifyCode').value.trim();
+
+    if (!code || code.length !== 6) {
+        showError('Digite o código de 6 dígitos');
+        return;
+    }
+
+    setLoading(button, true);
+    hideError();
+
+    try {
+        await apiRequest('/auth/abastecedor/verify-reset-code', {
+            method: 'POST',
+            body: { cpf: resetCpf, code }
+        });
+
+        showResetPasswordForm();
+        showToast('Código verificado!', 'success');
+    } catch (error) {
+        showError(error.message);
+    } finally {
+        setLoading(button, false);
+    }
+}
+
+async function handleResetPassword(e) {
+    e.preventDefault();
+    const form = document.getElementById('resetPasswordFormElement');
+    const button = form.querySelector('button[type="submit"]');
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+
+    if (!newPassword || newPassword.length < 4) {
+        showError('Senha deve ter pelo menos 4 caracteres');
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        showError('As senhas não coincidem');
+        return;
+    }
+
+    setLoading(button, true);
+    hideError();
+
+    try {
+        await apiRequest('/auth/abastecedor/reset-password', {
+            method: 'POST',
+            body: { cpf: resetCpf, newPassword }
+        });
+
+        showToast('Senha alterada com sucesso!', 'success');
+        showLoginForm();
+
+        // Clear forms
+        document.getElementById('forgotPasswordFormElement').reset();
+        document.getElementById('verifyCodeFormElement').reset();
+        document.getElementById('resetPasswordFormElement').reset();
+    } catch (error) {
+        showError(error.message);
+    } finally {
+        setLoading(button, false);
+    }
+}
+
+async function handleResendCode(e) {
+    e.preventDefault();
+
+    if (!resetCpf) {
+        showError('Erro: CPF não encontrado');
+        return;
+    }
+
+    try {
+        const response = await apiRequest('/auth/abastecedor/forgot-password', {
+            method: 'POST',
+            body: { cpf: resetCpf }
+        });
+
+        showToast('Novo código enviado!', 'success');
+        document.getElementById('verifyCodeSubtitle').textContent = `Código enviado para ${response.phone}`;
+    } catch (error) {
+        showError(error.message);
+    }
 }
 
 // ========================================
@@ -572,6 +733,40 @@ function init() {
     document.getElementById('insumoCapture')?.addEventListener('click', () => capturePhoto('insumo'));
     document.getElementById('insumoRetake')?.addEventListener('click', () => retakePhoto('insumo'));
     document.getElementById('insumoPlaceholder')?.addEventListener('click', () => startCamera('insumo'));
+
+    // Password Recovery - Event Listeners
+    document.getElementById('showForgotPassword')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        showForgotPasswordForm();
+    });
+
+    document.getElementById('backToLoginFromForgot')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        showLoginForm();
+    });
+
+    document.getElementById('backToLoginFromVerify')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        showLoginForm();
+    });
+
+    document.getElementById('backToLoginFromReset')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        showLoginForm();
+    });
+
+    document.getElementById('resendCode')?.addEventListener('click', handleResendCode);
+
+    // Password Recovery - Form Handlers
+    document.getElementById('forgotPasswordFormElement')?.addEventListener('submit', handleForgotPassword);
+    document.getElementById('verifyCodeFormElement')?.addEventListener('submit', handleVerifyCode);
+    document.getElementById('resetPasswordFormElement')?.addEventListener('submit', handleResetPassword);
+
+    // CPF formatting for forgot password form
+    const forgotCpf = document.getElementById('forgotCpf');
+    if (forgotCpf) {
+        forgotCpf.addEventListener('input', () => formatCPFInput(forgotCpf));
+    }
 
     // Check if already logged in
     if (token) {

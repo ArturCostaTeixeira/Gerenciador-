@@ -148,11 +148,12 @@ adminRouter.put('/:id', upload.fields([
             return res.status(404).json({ error: 'Freight not found' });
         }
 
-        const { date, client, km, tons, price_per_km_ton, price_per_km_ton_transportadora, status } = req.body;
+        const { date, client, km, tons, price_per_km_ton, price_per_km_ton_transportadora, status, plate } = req.body;
         const updateData = {};
 
         if (date !== undefined) updateData.date = date;
         if (client !== undefined) updateData.client = client;
+        if (plate !== undefined) updateData.plate = plate;
         if (km !== undefined) updateData.km = parseFloat(km);
         if (tons !== undefined) updateData.tons = parseFloat(tons);
         if (price_per_km_ton !== undefined) updateData.price_per_km_ton = parseFloat(price_per_km_ton);

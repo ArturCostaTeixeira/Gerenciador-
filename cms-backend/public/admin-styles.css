@@ -1147,3 +1147,69 @@ select.filter-input,
     margin-bottom: 0.75rem;
     font-weight: 600;
 }
+
+/* Additional Plate Rows in Modal */
+.additional-plate-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.additional-plate-row input {
+    flex: 1;
+    text-transform: uppercase;
+}
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--error);
+    border: 1px solid var(--error);
+}
+
+.btn-danger:hover {
+    background: rgba(239, 68, 68, 0.3);
+}
+
+#editAdditionalPlatesList {
+    margin-bottom: 0.5rem;
+}
+
+/* ========================================
+   PDF Export Print Mode
+   ======================================== */
+.pdf-print-mode {
+    background: #ffffff !important;
+}
+
+.pdf-print-mode,
+.pdf-print-mode * {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+}
+
+.pdf-print-mode .glass,
+.pdf-print-mode .card,
+.pdf-print-mode .summary-card {
+    background: #ffffff !important;
+    border: 1px solid #000000 !important;
+}
+
+.pdf-print-mode .data-table th,
+.pdf-print-mode .data-table td {
+    border: 1px solid #000000 !important;
+    background: #ffffff !important;
+}
+
+.pdf-print-mode .data-table th {
+    background: #f0f0f0 !important;
+}
+
+.pdf-print-mode .value-positive,
+.pdf-print-mode .value-negative {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+}
+
+.pdf-print-mode .summary-card.highlight {
+    background: #f0f0f0 !important;
+}

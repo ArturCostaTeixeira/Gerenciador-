@@ -58,13 +58,17 @@ const Abastecedor = {
      * @returns {Object|null} - Updated abastecedor or null
      */
     async update(id, data) {
-        const { name, phone, active } = data;
+        const { name, cpf, phone, active } = data;
         const updates = [];
         const values = [];
 
         if (name !== undefined) {
             updates.push('name = ?');
             values.push(name);
+        }
+        if (cpf !== undefined) {
+            updates.push('cpf = ?');
+            values.push(cpf);
         }
         if (phone !== undefined) {
             updates.push('phone = ?');
@@ -99,6 +103,18 @@ const Abastecedor = {
         if (!bcrypt.compareSync(password, abastecedor.password)) return null;
 
         return abastecedor;
+    },
+
+    /**
+     * Update abastecedor password
+     * @param {number} id - Abastecedor ID
+     * @param {string} newPassword - New plain text password
+     * @returns {Object|null} - Updated abastecedor
+     */
+    async updatePassword(id, newPassword) {
+        const hashedPassword = bcrypt.hashSync(newPassword, 10);
+        await execute('UPDATE abastecedores SET password = ? WHERE id = ?', [hashedPassword, id]);
+        return this.findById(id);
     }
 };
 

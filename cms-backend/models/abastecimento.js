@@ -188,6 +188,10 @@ const Abastecimento = {
      * @returns {boolean} - Success
      */
     async delete(id) {
+        // First delete related records to avoid foreign key constraints
+        await execute('DELETE FROM comprovantes_abastecimento WHERE assigned_abastecimento_id = ?', [id]);
+
+        // Now delete the abastecimento
         const result = await execute('DELETE FROM abastecimentos WHERE id = ?', [id]);
         return result.changes > 0;
     }

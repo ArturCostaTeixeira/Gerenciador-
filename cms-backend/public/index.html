@@ -40,6 +40,7 @@
                             </button>
                         </form>
                         <div class="form-footer">
+                            <p><a href="#" id="showForgotPassword">Esqueceu a Senha?</a></p>
                             <p>Primeiro acesso? <a href="#" id="showSignup">Cadastre-se</a></p>
                         </div>
                     </div>
@@ -84,6 +85,73 @@
                         </form>
                         <div class="form-footer">
                             <p>Já possui conta? <a href="#" id="showLogin">Entrar</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Forgot Password Form - Step 1: Enter CPF -->
+                    <div id="forgotPasswordForm" class="form-section hidden">
+                        <h2 class="form-title">Recuperar Senha</h2>
+                        <p class="form-subtitle">Digite seu CPF para receber um código por SMS</p>
+                        <form id="forgotPasswordFormElement">
+                            <div class="input-group">
+                                <label for="forgotCpf">CPF</label>
+                                <input type="text" id="forgotCpf" placeholder="000.000.000-00" required
+                                    autocomplete="off">
+                                <span class="input-hint">Formato: 000.000.000-00</span>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-full">
+                                <span>Enviar Código</span>
+                                <span class="btn-loader hidden"></span>
+                            </button>
+                        </form>
+                        <div class="form-footer">
+                            <p><a href="#" id="backToLoginFromForgot">← Voltar ao Login</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Verify Code Form - Step 2: Enter SMS Code -->
+                    <div id="verifyCodeForm" class="form-section hidden">
+                        <h2 class="form-title">Verificar Código</h2>
+                        <p class="form-subtitle" id="verifyCodeSubtitle">Digite o código enviado por SMS</p>
+                        <form id="verifyCodeFormElement">
+                            <div class="input-group">
+                                <label for="verifyCode">Código de 6 dígitos</label>
+                                <input type="text" id="verifyCode" placeholder="000000" maxlength="6" pattern="[0-9]{6}"
+                                    required autocomplete="off" class="code-input">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-full">
+                                <span>Verificar</span>
+                                <span class="btn-loader hidden"></span>
+                            </button>
+                        </form>
+                        <div class="form-footer">
+                            <p><a href="#" id="resendCode">Reenviar código</a></p>
+                            <p><a href="#" id="backToLoginFromVerify">← Voltar ao Login</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Reset Password Form - Step 3: Enter New Password -->
+                    <div id="resetPasswordForm" class="form-section hidden">
+                        <h2 class="form-title">Nova Senha</h2>
+                        <p class="form-subtitle">Digite sua nova senha</p>
+                        <form id="resetPasswordFormElement">
+                            <div class="input-group">
+                                <label for="newPassword">Nova Senha</label>
+                                <input type="password" id="newPassword" placeholder="Mínimo 4 caracteres" minlength="4"
+                                    required>
+                            </div>
+                            <div class="input-group">
+                                <label for="confirmPassword">Confirmar Senha</label>
+                                <input type="password" id="confirmPassword" placeholder="Confirme a senha" minlength="4"
+                                    required>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-full">
+                                <span>Alterar Senha</span>
+                                <span class="btn-loader hidden"></span>
+                            </button>
+                        </form>
+                        <div class="form-footer">
+                            <p><a href="#" id="backToLoginFromReset">← Voltar ao Login</a></p>
                         </div>
                     </div>
 
@@ -182,6 +250,8 @@
                 <div class="header-center"><img src="logo_excava.png" alt="Logo" style="width: 80px; height: 80px;">
                 </div>
                 <div class="header-right">
+                    <button id="exportExtratoPdfBtn" class="btn btn-primary" style="margin-right: 0.5rem;">📄 Exportar
+                        PDF</button>
                     <button id="extratoLogoutBtn" class="btn btn-outline">
                         Sair
                     </button>
@@ -371,6 +441,8 @@
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="app.js"></script>
 </body>
 

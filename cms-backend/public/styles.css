@@ -859,3 +859,68 @@ body {
     background: #1a1a2e;
     color: var(--text-primary);
 }
+
+/* Password Recovery Forms */
+.form-title {
+    text-align: center;
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.form-subtitle {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+
+.code-input {
+    text-align: center;
+    font-size: 1.5rem;
+    letter-spacing: 0.5rem;
+    font-weight: 600;
+}
+
+/* ========================================
+   PDF Export Print Mode
+   ======================================== */
+.pdf-print-mode {
+    background: #ffffff !important;
+}
+
+.pdf-print-mode,
+.pdf-print-mode * {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+}
+
+.pdf-print-mode .glass,
+.pdf-print-mode .extrato-section,
+.pdf-print-mode .summary-card-sm {
+    background: #ffffff !important;
+    border: 1px solid #000000 !important;
+}
+
+.pdf-print-mode .data-table th,
+.pdf-print-mode .data-table td {
+    border: 1px solid #000000 !important;
+    background: #ffffff !important;
+}
+
+.pdf-print-mode .data-table th {
+    background: #f0f0f0 !important;
+}
+
+.pdf-print-mode .value-positive,
+.pdf-print-mode .value-negative {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+}
+
+.pdf-print-mode .summary-card-sm.highlight {
+    background: #f0f0f0 !important;
+}

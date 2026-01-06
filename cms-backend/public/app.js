@@ -554,6 +554,139 @@ async function loadExtratoPagamentos() {
 }
 
 // ========================================
+// PDF Export
+// ========================================
+
+async function exportExtratoPDF() {
+    const content = document.querySelector('.extrato-content');
+
+    if (!content) {
+        showToast('Conteúdo não encontrado', 'error');
+        return;
+    }
+
+    // Show loading state
+    const exportBtn = document.getElementById('exportExtratoPdfBtn');
+    const originalText = exportBtn.textContent;
+    exportBtn.textContent = 'Gerando PDF...';
+    exportBtn.disabled = true;
+
+    try {
+        // Apply print mode for white background and black text
+        content.classList.add('pdf-print-mode');
+
+        // Wait for styles to apply
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Capture the content as canvas
+        const canvas = await html2canvas(content, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff'
+        });
+
+        // Remove print mode
+        content.classList.remove('pdf-print-mode');
+
+        // Create PDF with A4 dimensions
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+
+        // Calculate image dimensions to fit A4
+        const imgWidth = pageWidth - 20;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        // Add white background and black header text
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+
+        // Add logo to top right corner
+        try {
+            const logoImg = new Image();
+            logoImg.crossOrigin = 'anonymous';
+            await new Promise((resolve, reject) => {
+                logoImg.onload = resolve;
+                logoImg.onerror = reject;
+                logoImg.src = '../images/logo1.jpg';
+            });
+            const logoCanvas = document.createElement('canvas');
+            logoCanvas.width = logoImg.width;
+            logoCanvas.height = logoImg.height;
+            const logoCtx = logoCanvas.getContext('2d');
+            logoCtx.drawImage(logoImg, 0, 0);
+            const logoData = logoCanvas.toDataURL('image/png');
+            const logoWidth = 25; // mm
+            const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
+            pdf.addImage(logoData, 'PNG', pageWidth - logoWidth - 10, 5, logoWidth, logoHeight);
+        } catch (e) {
+            console.warn('Could not add logo to PDF:', e);
+        }
+
+        const driverName = userData?.name || 'Motorista';
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFontSize(16);
+        pdf.text(`Extrato - ${driverName}`, 10, 15);
+        pdf.setFontSize(10);
+        pdf.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 10, 22);
+
+        // Add content image
+        const imgData = canvas.toDataURL('image/png');
+
+        // Handle multi-page if content is too long
+        let yPosition = 30;
+        const maxHeightPerPage = pageHeight - 40;
+
+        if (imgHeight <= maxHeightPerPage) {
+            pdf.addImage(imgData, 'PNG', 10, yPosition, imgWidth, imgHeight);
+        } else {
+            let sourceY = 0;
+            const sourceHeight = canvas.height;
+            const pixelsPerPage = (maxHeightPerPage / imgHeight) * sourceHeight;
+
+            while (sourceY < sourceHeight) {
+                if (sourceY > 0) {
+                    pdf.addPage();
+                    pdf.setFillColor(255, 255, 255);
+                    pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+                    yPosition = 10;
+                }
+
+                const pageCanvas = document.createElement('canvas');
+                pageCanvas.width = canvas.width;
+                pageCanvas.height = Math.min(pixelsPerPage, sourceHeight - sourceY);
+                const ctx = pageCanvas.getContext('2d');
+                ctx.drawImage(canvas, 0, sourceY, canvas.width, pageCanvas.height, 0, 0, canvas.width, pageCanvas.height);
+
+                const pageImgData = pageCanvas.toDataURL('image/png');
+                const pageImgHeight = (pageCanvas.height * imgWidth) / canvas.width;
+                pdf.addImage(pageImgData, 'PNG', 10, yPosition, imgWidth, pageImgHeight);
+
+                sourceY += pixelsPerPage;
+            }
+        }
+
+        // Generate filename and save
+        const sanitizedName = driverName.replace(/[^a-zA-Z0-9]/g, '_');
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const filename = `Extrato_${sanitizedName}_${dateStr}.pdf`;
+
+        pdf.save(filename);
+        showToast('PDF exportado com sucesso!', 'success');
+    } catch (error) {
+        console.error('PDF export error:', error);
+        content.classList.remove('pdf-print-mode');
+        showToast('Erro ao gerar PDF. Tente novamente.', 'error');
+    } finally {
+        exportBtn.textContent = originalText;
+        exportBtn.disabled = false;
+    }
+}
+
+// ========================================
 // Camera Functions
 // ========================================
 
@@ -872,6 +1005,165 @@ window.removeAdditionalPlate = function (id) {
 };
 
 // ========================================
+// Password Recovery
+// ========================================
+
+let resetCpf = ''; // Store CPF during reset flow
+let resetCode = ''; // Store verified code during reset flow
+
+function showForgotPasswordForm() {
+    loginForm.classList.add('hidden');
+    signupForm.classList.add('hidden');
+    document.getElementById('forgotPasswordForm').classList.remove('hidden');
+    document.getElementById('verifyCodeForm').classList.add('hidden');
+    document.getElementById('resetPasswordForm').classList.add('hidden');
+    hideError();
+    resetCpf = '';
+    resetCode = '';
+}
+
+function showVerifyCodeForm(phone) {
+    document.getElementById('forgotPasswordForm').classList.add('hidden');
+    document.getElementById('verifyCodeForm').classList.remove('hidden');
+    document.getElementById('verifyCodeSubtitle').textContent = `Digite o código enviado para ${phone}`;
+    hideError();
+}
+
+function showResetPasswordForm() {
+    document.getElementById('verifyCodeForm').classList.add('hidden');
+    document.getElementById('resetPasswordForm').classList.remove('hidden');
+    hideError();
+}
+
+function showLoginForm() {
+    loginForm.classList.remove('hidden');
+    signupForm.classList.add('hidden');
+    document.getElementById('forgotPasswordForm').classList.add('hidden');
+    document.getElementById('verifyCodeForm').classList.add('hidden');
+    document.getElementById('resetPasswordForm').classList.add('hidden');
+    hideError();
+    resetCpf = '';
+    resetCode = '';
+}
+
+async function handleForgotPassword(e) {
+    e.preventDefault();
+    const form = document.getElementById('forgotPasswordFormElement');
+    const button = form.querySelector('button[type="submit"]');
+    const cpf = document.getElementById('forgotCpf').value.trim().replace(/\D/g, '');
+
+    if (!cpf || cpf.length !== 11) {
+        showError('Digite um CPF válido');
+        return;
+    }
+
+    setLoading(button, true);
+    hideError();
+
+    try {
+        const data = await apiRequest('/auth/driver/forgot-password', {
+            method: 'POST',
+            body: JSON.stringify({ cpf })
+        });
+
+        resetCpf = cpf;
+        showVerifyCodeForm(data.phone);
+        showToast('Código enviado por SMS!', 'success');
+    } catch (error) {
+        showError(error.message);
+    } finally {
+        setLoading(button, false);
+    }
+}
+
+async function handleVerifyCode(e) {
+    e.preventDefault();
+    const form = document.getElementById('verifyCodeFormElement');
+    const button = form.querySelector('button[type="submit"]');
+    const code = document.getElementById('verifyCode').value.trim();
+
+    if (!code || code.length !== 6) {
+        showError('Digite o código de 6 dígitos');
+        return;
+    }
+
+    setLoading(button, true);
+    hideError();
+
+    try {
+        await apiRequest('/auth/driver/verify-reset-code', {
+            method: 'POST',
+            body: JSON.stringify({ cpf: resetCpf, code })
+        });
+
+        resetCode = code;
+        showResetPasswordForm();
+        showToast('Código verificado!', 'success');
+    } catch (error) {
+        showError(error.message);
+    } finally {
+        setLoading(button, false);
+    }
+}
+
+async function handleResetPassword(e) {
+    e.preventDefault();
+    const form = document.getElementById('resetPasswordFormElement');
+    const button = form.querySelector('button[type="submit"]');
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+
+    if (!newPassword || newPassword.length < 4) {
+        showError('Senha deve ter pelo menos 4 caracteres');
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        showError('As senhas não coincidem');
+        return;
+    }
+
+    setLoading(button, true);
+    hideError();
+
+    try {
+        await apiRequest('/auth/driver/reset-password', {
+            method: 'POST',
+            body: JSON.stringify({ cpf: resetCpf, newPassword })
+        });
+
+        showToast('Senha alterada com sucesso!', 'success');
+        showLoginForm();
+
+        // Clear forms
+        document.getElementById('forgotPasswordFormElement').reset();
+        document.getElementById('verifyCodeFormElement').reset();
+        document.getElementById('resetPasswordFormElement').reset();
+    } catch (error) {
+        showError(error.message);
+    } finally {
+        setLoading(button, false);
+    }
+}
+
+async function handleResendCode() {
+    if (!resetCpf) {
+        showForgotPasswordForm();
+        return;
+    }
+
+    try {
+        const data = await apiRequest('/auth/driver/forgot-password', {
+            method: 'POST',
+            body: JSON.stringify({ cpf: resetCpf })
+        });
+        showToast('Código reenviado!', 'success');
+    } catch (error) {
+        showError(error.message);
+    }
+}
+
+// ========================================
 // Initialize App
 // ========================================
 
@@ -883,6 +1175,50 @@ function init() {
     showLoginLink.addEventListener('click', (e) => { e.preventDefault(); toggleForms(false); });
     logoutBtn.addEventListener('click', logout);
     extratoLogoutBtn.addEventListener('click', logout);
+
+    // Password Recovery Event Listeners
+    const showForgotPasswordLink = document.getElementById('showForgotPassword');
+    if (showForgotPasswordLink) {
+        showForgotPasswordLink.addEventListener('click', (e) => { e.preventDefault(); showForgotPasswordForm(); });
+    }
+
+    const forgotPasswordFormElement = document.getElementById('forgotPasswordFormElement');
+    if (forgotPasswordFormElement) {
+        forgotPasswordFormElement.addEventListener('submit', handleForgotPassword);
+        formatCPFInput(document.getElementById('forgotCpf'));
+    }
+
+    const verifyCodeFormElement = document.getElementById('verifyCodeFormElement');
+    if (verifyCodeFormElement) {
+        verifyCodeFormElement.addEventListener('submit', handleVerifyCode);
+    }
+
+    const resetPasswordFormElement = document.getElementById('resetPasswordFormElement');
+    if (resetPasswordFormElement) {
+        resetPasswordFormElement.addEventListener('submit', handleResetPassword);
+    }
+
+    // Back to login links
+    const backToLoginFromForgot = document.getElementById('backToLoginFromForgot');
+    if (backToLoginFromForgot) {
+        backToLoginFromForgot.addEventListener('click', (e) => { e.preventDefault(); showLoginForm(); });
+    }
+
+    const backToLoginFromVerify = document.getElementById('backToLoginFromVerify');
+    if (backToLoginFromVerify) {
+        backToLoginFromVerify.addEventListener('click', (e) => { e.preventDefault(); showLoginForm(); });
+    }
+
+    const backToLoginFromReset = document.getElementById('backToLoginFromReset');
+    if (backToLoginFromReset) {
+        backToLoginFromReset.addEventListener('click', (e) => { e.preventDefault(); showLoginForm(); });
+    }
+
+    // Resend code link
+    const resendCodeLink = document.getElementById('resendCode');
+    if (resendCodeLink) {
+        resendCodeLink.addEventListener('click', (e) => { e.preventDefault(); handleResendCode(); });
+    }
 
     // Waiting page logout button
     const waitingLogoutBtn = document.getElementById('waitingLogoutBtn');
@@ -962,6 +1298,12 @@ function init() {
         });
     });
 
+    // PDF Export button
+    const exportPdfBtn = document.getElementById('exportExtratoPdfBtn');
+    if (exportPdfBtn) {
+        exportPdfBtn.addEventListener('click', exportExtratoPDF);
+    }
+
     // Format plate inputs
     formatPlateInput(document.getElementById('loginPlate'));
     formatPlateInput(document.getElementById('signupPlate'));
@@ -982,3 +1324,4 @@ function init() {
 
 // Start app
 document.addEventListener('DOMContentLoaded', init);
+
