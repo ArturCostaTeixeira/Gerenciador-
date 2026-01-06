@@ -8,7 +8,7 @@ const Freight = {
      * @returns {Object} - Created freight with calculated total_value
      */
     async create(data) {
-        const { driver_id, date, km, tons, price_per_km_ton, price_per_km_ton_transportadora, client, comprovante_carga, comprovante_descarga, comprovante_recebimento } = data;
+        const { driver_id, date, km, tons, price_per_km_ton, price_per_km_ton_transportadora, client, plate, comprovante_carga, comprovante_descarga, comprovante_recebimento } = data;
 
         // Verify driver exists
         const driver = await Driver.findById(driver_id);
@@ -23,8 +23,8 @@ const Freight = {
         const total_value_transportadora = (km || 0) * (tons || 0) * (price_per_km_ton_transportadora || 0);
 
         const result = await execute(`
-            INSERT INTO freights (driver_id, date, km, tons, price_per_km_ton, price_per_km_ton_transportadora, total_value, total_value_transportadora, client, comprovante_carga, comprovante_descarga, comprovante_recebimento, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'complete')
+            INSERT INTO freights (driver_id, date, km, tons, price_per_km_ton, price_per_km_ton_transportadora, total_value, total_value_transportadora, client, plate, comprovante_carga, comprovante_descarga, comprovante_recebimento, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'complete')
         `, [
             driver_id,
             date,
@@ -35,6 +35,7 @@ const Freight = {
             total_value,
             total_value_transportadora,
             client || null,
+            plate || null,
             comprovante_carga || null,
             comprovante_descarga || null,
             comprovante_recebimento || null

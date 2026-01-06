@@ -39,7 +39,7 @@ adminRouter.use(requireAdmin);
  */
 adminRouter.post('/', upload.single('comprovante_abastecimento'), async (req, res) => {
     try {
-        const { driver_id, date, quantity, price_per_liter } = req.body;
+        const { driver_id, date, quantity, price_per_liter, plate } = req.body;
 
         // Validate input
         if (!driver_id || !date || quantity === undefined || price_per_liter === undefined) {
@@ -84,6 +84,7 @@ adminRouter.post('/', upload.single('comprovante_abastecimento'), async (req, re
             date,
             quantity: parseFloat(quantity),
             price_per_liter: parseFloat(price_per_liter),
+            plate: plate || null,
             comprovante_abastecimento
         });
         res.status(201).json(abastecimento);

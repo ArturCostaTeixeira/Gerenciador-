@@ -47,7 +47,7 @@ adminRouter.post('/', upload.fields([
     { name: 'comprovante_recebimento', maxCount: 1 }
 ]), async (req, res) => {
     try {
-        const { driver_id, date, km, tons, price_per_km_ton, price_per_km_ton_transportadora, client } = req.body;
+        const { driver_id, date, km, tons, price_per_km_ton, price_per_km_ton_transportadora, client, plate } = req.body;
 
         // Validate input
         if (!driver_id || !date || km === undefined || tons === undefined || price_per_km_ton === undefined) {
@@ -124,6 +124,7 @@ adminRouter.post('/', upload.fields([
             price_per_km_ton: parseFloat(price_per_km_ton),
             price_per_km_ton_transportadora: price_per_km_ton_transportadora ? parseFloat(price_per_km_ton_transportadora) : null,
             client: client ? client.trim() : null,
+            plate: plate || null,
             comprovante_carga,
             comprovante_descarga,
             comprovante_recebimento

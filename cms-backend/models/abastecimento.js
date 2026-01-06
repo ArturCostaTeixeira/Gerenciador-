@@ -9,7 +9,7 @@ const Abastecimento = {
      * @returns {Object} - Created abastecimento with calculated total_value
      */
     async create(data) {
-        const { driver_id, date, quantity, price_per_liter, comprovante_abastecimento } = data;
+        const { driver_id, date, quantity, price_per_liter, comprovante_abastecimento, plate } = data;
 
         // Verify driver exists
         const driver = await Driver.findById(driver_id);
@@ -21,9 +21,9 @@ const Abastecimento = {
         const total_value = quantity * price_per_liter;
 
         const result = await execute(`
-            INSERT INTO abastecimentos (driver_id, date, quantity, price_per_liter, total_value, comprovante_abastecimento, status)
-            VALUES (?, ?, ?, ?, ?, ?, 'complete')
-        `, [driver_id, date, quantity, price_per_liter, total_value, comprovante_abastecimento || null]);
+            INSERT INTO abastecimentos (driver_id, date, quantity, price_per_liter, total_value, comprovante_abastecimento, plate, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'complete')
+        `, [driver_id, date, quantity, price_per_liter, total_value, comprovante_abastecimento || null, plate || null]);
         return this.findById(result.lastInsertRowid);
     },
 

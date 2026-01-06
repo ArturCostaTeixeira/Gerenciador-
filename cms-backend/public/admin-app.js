@@ -1224,7 +1224,7 @@ window.editFreight = async function (id) {
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${API_BASE} / admin / freights / ${id}`, {
+        const response = await fetch(`${API_BASE}/admin/freights/${id}`, {
             method: 'PUT',
             headers,
             body: formData
@@ -1243,7 +1243,7 @@ window.editFreight = async function (id) {
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${API_BASE} / admin / freights / ${id}`, {
+        const response = await fetch(`${API_BASE}/admin/freights/${id}`, {
             method: 'DELETE',
             headers
         });
@@ -1283,10 +1283,39 @@ function showAddFreightModal() {
         clients.map(c => `<option value="${c.client}">${c.client}</option>`).join('') +
         uniqueClients.filter(c => !clients.some(cl => cl.client === c)).map(c => `<option value="${c}">${c}</option>`).join('');
 
+    // Helper function to get all plates for a driver
+    const getDriverPlates = (driver) => {
+        if (!driver) return [];
+        let plates = [];
+        if (driver.plate) plates.push(driver.plate);
+        if (driver.plates) {
+            try {
+                const additionalPlates = typeof driver.plates === 'string' ? JSON.parse(driver.plates) : driver.plates;
+                if (Array.isArray(additionalPlates)) {
+                    plates = [...new Set([...plates, ...additionalPlates])];
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
+        return plates;
+    };
+
+    // Get initial plate options for the first driver
+    const firstDriver = drivers.length > 0 ? drivers[0] : null;
+    const initialPlates = getDriverPlates(firstDriver);
+    const initialPlateOptions = initialPlates.length > 0
+        ? initialPlates.map(p => `<option value="${p}">${p}</option>`).join('')
+        : '<option value="">Nenhuma placa</option>';
+
     showModal('Novo Frete', `
         <div class="input-group">
             <label>Motorista</label>
             <select id="newFreightDriver" required>${driverOptions}</select>
+        </div>
+        <div class="input-group">
+            <label>Placa</label>
+            <select id="newFreightPlate" required>${initialPlateOptions}</select>
         </div>
         <div class="input-group">
             <label>Cliente</label>
@@ -1323,6 +1352,7 @@ function showAddFreightModal() {
     `, async () => {
         const formData = new FormData();
         formData.append('driver_id', document.getElementById('newFreightDriver').value);
+        formData.append('plate', document.getElementById('newFreightPlate').value);
         formData.append('client', document.getElementById('newFreightClient').value);
         formData.append('date', document.getElementById('newFreightDate').value);
         formData.append('km', document.getElementById('newFreightKm').value);
@@ -1345,7 +1375,7 @@ function showAddFreightModal() {
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${API_BASE} / admin / freights`, {
+        const response = await fetch(`${API_BASE}/admin/freights`, {
             method: 'POST',
             headers,
             body: formData
@@ -1359,6 +1389,24 @@ function showAddFreightModal() {
         await loadFreights();
         await loadClients();
     });
+
+    // Attach driver change handler to update plates dropdown
+    setTimeout(() => {
+        const driverSelect = document.getElementById('newFreightDriver');
+        const plateSelect = document.getElementById('newFreightPlate');
+
+        if (driverSelect && plateSelect) {
+            driverSelect.addEventListener('change', function () {
+                const selectedDriverId = parseInt(this.value);
+                const selectedDriver = drivers.find(d => d.id === selectedDriverId);
+                const plates = getDriverPlates(selectedDriver);
+
+                plateSelect.innerHTML = plates.length > 0
+                    ? plates.map(p => `<option value="${p}">${p}</option>`).join('')
+                    : '<option value="">Nenhuma placa</option>';
+            });
+        }
+    }, 100);
 }
 
 // ========================================
@@ -1455,7 +1503,7 @@ function renderAbastecimentosTable() {
                 <tr class="${isPending ? 'row-pending' : ''}">
                     <td>${formatDate(a.date)}</td>
                     <td>${a.driver_name || driver?.name || '-'}</td>
-                    <td>${a.driver_plate || driver?.plate || '-'}</td>
+                    <td>${a.plate || a.driver_plate || driver?.plate || '-'}</td>
                     <td>${a.client || driver?.client || '-'}</td>
                     <td>${isPending ? '<span class="text-muted">-</span>' : formatNumber(a.quantity, 2)}</td>
                     <td>${isPending ? '<span class="text-muted">-</span>' : formatPricePerLiter(a.price_per_liter)}</td>
@@ -1637,9 +1685,9 @@ window.editAbastecimento = async function (id) {
         if (comprovanteFile) formData.append('comprovante_abastecimento', comprovanteFile);
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token} `;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${API_BASE} /admin/abastecimentos / ${id} `, {
+        const response = await fetch(`${API_BASE}/admin/abastecimentos/${id}`, {
             method: 'PUT',
             headers,
             body: formData
@@ -1655,9 +1703,9 @@ window.editAbastecimento = async function (id) {
     }, async () => {
         // Delete callback
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token} `;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${API_BASE} /admin/abastecimentos / ${id} `, {
+        const response = await fetch(`${API_BASE}/admin/abastecimentos/${id}`, {
             method: 'DELETE',
             headers
         });
@@ -1691,10 +1739,40 @@ window.editAbastecimento = async function (id) {
 
 function showAddAbastecimentoModal() {
     const options = drivers.map(d => `<option value="${d.id}">${d.name} (${d.plate})</option>`).join('');
+
+    // Helper function to get all plates for a driver
+    const getDriverPlates = (driver) => {
+        if (!driver) return [];
+        let plates = [];
+        if (driver.plate) plates.push(driver.plate);
+        if (driver.plates) {
+            try {
+                const additionalPlates = typeof driver.plates === 'string' ? JSON.parse(driver.plates) : driver.plates;
+                if (Array.isArray(additionalPlates)) {
+                    plates = [...new Set([...plates, ...additionalPlates])];
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
+        return plates;
+    };
+
+    // Get initial plate options for the first driver
+    const firstDriver = drivers.length > 0 ? drivers[0] : null;
+    const initialPlates = getDriverPlates(firstDriver);
+    const initialPlateOptions = initialPlates.length > 0
+        ? initialPlates.map(p => `<option value="${p}">${p}</option>`).join('')
+        : '<option value="">Nenhuma placa</option>';
+
     showModal('Novo Abastecimento', `
         <div class="input-group">
             <label>Motorista</label>
             <select id="newAbastDriver" required>${options}</select>
+        </div>
+        <div class="input-group">
+            <label>Placa</label>
+            <select id="newAbastPlate" required>${initialPlateOptions}</select>
         </div>
         <div class="input-group">
             <label>Data</label>
@@ -1712,9 +1790,10 @@ function showAddAbastecimentoModal() {
             <label>Comprovante de Abastecimento (Foto)</label>
             <input type="file" id="newAbastComprovante" accept=".png,.jpg,.jpeg" class="file-input">
         </div>
-`, async () => {
+    `, async () => {
         const formData = new FormData();
         formData.append('driver_id', document.getElementById('newAbastDriver').value);
+        formData.append('plate', document.getElementById('newAbastPlate').value);
         formData.append('date', document.getElementById('newAbastDate').value);
         formData.append('quantity', document.getElementById('newAbastQuantity').value);
         formData.append('price_per_liter', document.getElementById('newAbastPrice').value);
@@ -1725,9 +1804,9 @@ function showAddAbastecimentoModal() {
         }
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token} `;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${API_BASE} /admin/abastecimentos`, {
+        const response = await fetch(`${API_BASE}/admin/abastecimentos`, {
             method: 'POST',
             headers,
             body: formData
@@ -1741,6 +1820,24 @@ function showAddAbastecimentoModal() {
         await loadAbastecimentos();
         await loadClients();
     });
+
+    // Attach driver change handler to update plates dropdown
+    setTimeout(() => {
+        const driverSelect = document.getElementById('newAbastDriver');
+        const plateSelect = document.getElementById('newAbastPlate');
+
+        if (driverSelect && plateSelect) {
+            driverSelect.addEventListener('change', function () {
+                const selectedDriverId = parseInt(this.value);
+                const selectedDriver = drivers.find(d => d.id === selectedDriverId);
+                const plates = getDriverPlates(selectedDriver);
+
+                plateSelect.innerHTML = plates.length > 0
+                    ? plates.map(p => `<option value="${p}">${p}</option>`).join('')
+                    : '<option value="">Nenhuma placa</option>';
+            });
+        }
+    }, 100);
 }
 
 // ========================================
@@ -1908,9 +2005,9 @@ window.editOutrosInsumo = async function (id) {
         if (comprovanteFile) formData.append('comprovante', comprovanteFile);
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token} `;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${API_BASE} /admin/outrosinsumos / ${id} `, {
+        const response = await fetch(`${API_BASE}/admin/outrosinsumos/${id}`, {
             method: 'PUT',
             headers,
             body: formData
@@ -1925,9 +2022,9 @@ window.editOutrosInsumo = async function (id) {
     }, async () => {
         // Delete callback
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token} `;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${API_BASE} /admin/outrosinsumos / ${id} `, {
+        const response = await fetch(`${API_BASE}/admin/outrosinsumos/${id}`, {
             method: 'DELETE',
             headers
         });
