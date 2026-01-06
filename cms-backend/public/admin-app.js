@@ -106,20 +106,26 @@ function showPage(page) {
 
 async function handleLogin(e) {
     e.preventDefault();
+    console.log('handleLogin called');
     const button = loginForm.querySelector('button');
     const username = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
 
     setLoading(button, true);
     try {
+        console.log('Attempting login for:', username);
         const data = await apiRequest('/auth/admin/login', {
             method: 'POST',
             body: JSON.stringify({ username, password })
         });
+        console.log('Login successful, token received');
         token = data.token;
         localStorage.setItem('admin_token', token);
+        console.log('Loading dashboard...');
         await loadDashboard();
+        console.log('Dashboard loaded');
     } catch (error) {
+        console.error('Login error:', error);
         showError(error.message);
     } finally {
         setLoading(button, false);
@@ -1194,7 +1200,7 @@ window.editFreight = async function (id) {
             <input type="file" id="editFreightDocumento" class="file-input" accept="application/pdf,.pdf">
             ${freight.documento_frete ? `<a href="${freight.documento_frete}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📄 Ver atual</a>` : ''}
         </div>
-    \`, async () => {
+    `, async () => {
         const formData = new FormData();
         formData.append('driver_id', document.getElementById('editFreightDriver').value);
         formData.append('plate', document.getElementById('editFreightPlate').value);
@@ -1216,9 +1222,9 @@ window.editFreight = async function (id) {
         if (documentoFile) formData.append('documento_frete', documentoFile);
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${ token }`;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${ API_BASE } / admin / freights / ${ id }`, {
+        const response = await fetch(`${API_BASE} / admin / freights / ${id}`, {
             method: 'PUT',
             headers,
             body: formData
@@ -1235,9 +1241,9 @@ window.editFreight = async function (id) {
     }, async () => {
         // Delete callback
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${ token }`;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${ API_BASE } / admin / freights / ${ id }`, {
+        const response = await fetch(`${API_BASE} / admin / freights / ${id}`, {
             method: 'DELETE',
             headers
         });
@@ -1263,7 +1269,7 @@ window.editFreight = async function (id) {
                 const plates = getDriverPlates(selectedDriver);
 
                 plateSelect.innerHTML = plates.length > 0
-                    ? plates.map(p => `< option value = "${p}" > ${ p }</option > `).join('')
+                    ? plates.map(p => `< option value = "${p}" > ${p}</option > `).join('')
                     : '<option value="">Nenhuma placa</option>';
             });
         }
@@ -1271,11 +1277,11 @@ window.editFreight = async function (id) {
 };
 
 function showAddFreightModal() {
-    const driverOptions = drivers.map(d => `< option value = "${d.id}" > ${ d.name }(${ d.plate })</option > `).join('');
+    const driverOptions = drivers.map(d => `< option value = "${d.id}" > ${d.name}(${d.plate})</option > `).join('');
     const uniqueClients = [...new Set(drivers.filter(d => d.client).map(d => d.client))];
     const clientOptions = '<option value="">Selecione um cliente</option>' +
-        clients.map(c => `< option value = "${c.client}" > ${ c.client }</option > `).join('') +
-        uniqueClients.filter(c => !clients.some(cl => cl.client === c)).map(c => `< option value = "${c}" > ${ c }</option > `).join('');
+        clients.map(c => `< option value = "${c.client}" > ${c.client}</option > `).join('') +
+        uniqueClients.filter(c => !clients.some(cl => cl.client === c)).map(c => `< option value = "${c}" > ${c}</option > `).join('');
 
     showModal('Novo Frete', `
     < div class= "input-group" >
@@ -1337,9 +1343,9 @@ function showAddFreightModal() {
         }
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${ token }`;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${ API_BASE } / admin / freights`, {
+        const response = await fetch(`${API_BASE} / admin / freights`, {
             method: 'POST',
             headers,
             body: formData
@@ -1397,7 +1403,7 @@ function renderAbastecimentosTable() {
     const pageItems = filtered.slice(start, end);
 
     // Update UI Controls
-    document.getElementById('abastecimentosPageInfo').textContent = `Página ${ pagination.abastecimentos.page } de ${ totalPages }`;
+    document.getElementById('abastecimentosPageInfo').textContent = `Página ${pagination.abastecimentos.page} de ${totalPages}`;
     document.getElementById('abastecimentosPrevBtn').disabled = pagination.abastecimentos.page === 1;
     document.getElementById('abastecimentosNextBtn').disabled = pagination.abastecimentos.page === totalPages;
 
@@ -1422,11 +1428,10 @@ function renderAbastecimentosTable() {
                 comprovanteCell = `
         < select class= "descarga-select" onchange = "assignAbastComprovante(${a.id}, this.value)" data - abast - id="${a.id}" >
     <option value="">Selecionar...</option>
-                        ${
-        unassignedComprovantesAbast.map(c =>
-            `<option value="${c.id}">${c.display_name}</option>`
-        ).join('')
-    }
+                        ${unassignedComprovantesAbast.map(c =>
+                    `<option value="${c.id}">${c.display_name}</option>`
+                ).join('')
+                    }
                     </select >
         `;
             }
@@ -1469,7 +1474,7 @@ window.assignAbastComprovante = async function (abastecimentoId, comprovanteId) 
     if (!comprovanteId) return;
 
     try {
-        await apiRequest(`/ admin / comprovantes - abastecimento / ${ comprovanteId } / assign`, {
+        await apiRequest(`/ admin / comprovantes - abastecimento / ${comprovanteId} / assign`, {
             method: 'POST',
             body: JSON.stringify({ abastecimento_id: abastecimentoId })
         });
@@ -1533,7 +1538,7 @@ window.applyAbastComprovanteChange = async function (abastecimentoId) {
 
 window.unassignAbastComprovante = async function (abastecimentoId) {
     try {
-        await apiRequest(`/ admin / abastecimentos / ${ abastecimentoId } / unassign - comprovante`, {
+        await apiRequest(`/ admin / abastecimentos / ${abastecimentoId} / unassign - comprovante`, {
             method: 'POST'
         });
 
@@ -1555,11 +1560,11 @@ window.editAbastecimento = async function (id) {
 
     const allClients = [...new Set(clients.map(c => c.client))];
     const clientOptions = '<option value="">(Opcional) Selecione um cliente</option>' +
-        allClients.map(c => `< option value = "${c}" ${ abastecimento.client === c ? 'selected' : '' } > ${ c }</option > `).join('');
+        allClients.map(c => `< option value = "${c}" ${abastecimento.client === c ? 'selected' : ''} > ${c}</option > `).join('');
 
     // Build driver options dropdown
     const driverOptions = drivers.map(d =>
-        `< option value = "${d.id}" ${ abastecimento.driver_id === d.id ? 'selected' : '' } > ${ d.name }</option > `
+        `< option value = "${d.id}" ${abastecimento.driver_id === d.id ? 'selected' : ''} > ${d.name}</option > `
     ).join('');
 
     // Get plates for the current driver
@@ -1586,7 +1591,7 @@ window.editAbastecimento = async function (id) {
 
     const currentDriverPlates = getDriverPlates(currentDriver);
     const plateOptions = currentDriverPlates.map(p =>
-        `< option value = "${p}" ${ currentPlate === p ? 'selected' : ''} > ${ p }</option > `
+        `< option value = "${p}" ${currentPlate === p ? 'selected' : ''} > ${p}</option > `
     ).join('') || '<option value="">Nenhuma placa</option>';
 
     showModal(title, `
@@ -1633,9 +1638,9 @@ window.editAbastecimento = async function (id) {
         if (comprovanteFile) formData.append('comprovante_abastecimento', comprovanteFile);
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${ token } `;
+        if (token) headers['Authorization'] = `Bearer ${token} `;
 
-        const response = await fetch(`${ API_BASE } /admin/abastecimentos / ${ id } `, {
+        const response = await fetch(`${API_BASE} /admin/abastecimentos / ${id} `, {
             method: 'PUT',
             headers,
             body: formData
@@ -1651,9 +1656,9 @@ window.editAbastecimento = async function (id) {
     }, async () => {
         // Delete callback
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${ token } `;
+        if (token) headers['Authorization'] = `Bearer ${token} `;
 
-        const response = await fetch(`${ API_BASE } /admin/abastecimentos / ${ id } `, {
+        const response = await fetch(`${API_BASE} /admin/abastecimentos / ${id} `, {
             method: 'DELETE',
             headers
         });
@@ -1678,7 +1683,7 @@ window.editAbastecimento = async function (id) {
                 const plates = getDriverPlates(selectedDriver);
 
                 plateSelect.innerHTML = plates.length > 0
-                    ? plates.map(p => `< option value = "${p}" > ${ p }</option > `).join('')
+                    ? plates.map(p => `< option value = "${p}" > ${p}</option > `).join('')
                     : '<option value="">Nenhuma placa</option>';
             });
         }
@@ -1686,7 +1691,7 @@ window.editAbastecimento = async function (id) {
 };
 
 function showAddAbastecimentoModal() {
-    const options = drivers.map(d => `< option value = "${d.id}" > ${ d.name } (${ d.plate })</option > `).join('');
+    const options = drivers.map(d => `< option value = "${d.id}" > ${d.name} (${d.plate})</option > `).join('');
     showModal('Novo Abastecimento', `
     < div class="input-group" >
             <label>Motorista</label>
@@ -1721,9 +1726,9 @@ function showAddAbastecimentoModal() {
         }
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${ token } `;
+        if (token) headers['Authorization'] = `Bearer ${token} `;
 
-        const response = await fetch(`${ API_BASE } /admin/abastecimentos`, {
+        const response = await fetch(`${API_BASE} /admin/abastecimentos`, {
             method: 'POST',
             headers,
             body: formData
@@ -1781,7 +1786,7 @@ function renderOutrosInsumosTable() {
     const pageItems = filtered.slice(start, end);
 
     // Update UI Controls
-    document.getElementById('outrosInsumosPageInfo').textContent = `Página ${ pagination.outrosInsumos.page } de ${ totalPages } `;
+    document.getElementById('outrosInsumosPageInfo').textContent = `Página ${pagination.outrosInsumos.page} de ${totalPages} `;
     document.getElementById('outrosInsumosPrevBtn').disabled = pagination.outrosInsumos.page === 1;
     document.getElementById('outrosInsumosNextBtn').disabled = pagination.outrosInsumos.page === totalPages;
 
@@ -1823,7 +1828,7 @@ function renderOutrosInsumosTable() {
 }
 
 function showAddOutrosInsumoModal() {
-    const options = drivers.map(d => `< option value = "${d.id}" > ${ d.name } (${ d.plate })</option > `).join('');
+    const options = drivers.map(d => `< option value = "${d.id}" > ${d.name} (${d.plate})</option > `).join('');
     showModal('Novo Insumo', `
     < div class="input-group" >
             <label>Motorista</label>
@@ -1904,9 +1909,9 @@ window.editOutrosInsumo = async function (id) {
         if (comprovanteFile) formData.append('comprovante', comprovanteFile);
 
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${ token } `;
+        if (token) headers['Authorization'] = `Bearer ${token} `;
 
-        const response = await fetch(`${ API_BASE } /admin/outrosinsumos / ${ id } `, {
+        const response = await fetch(`${API_BASE} /admin/outrosinsumos / ${id} `, {
             method: 'PUT',
             headers,
             body: formData
@@ -1921,9 +1926,9 @@ window.editOutrosInsumo = async function (id) {
     }, async () => {
         // Delete callback
         const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${ token } `;
+        if (token) headers['Authorization'] = `Bearer ${token} `;
 
-        const response = await fetch(`${ API_BASE } /admin/outrosinsumos / ${ id } `, {
+        const response = await fetch(`${API_BASE} /admin/outrosinsumos / ${id} `, {
             method: 'DELETE',
             headers
         });
@@ -2071,7 +2076,7 @@ window.viewClientDetails = async function (clientName) {
         document.getElementById('clientsListView').classList.add('hidden');
         document.getElementById('clientDetailView').classList.remove('hidden');
 
-        document.getElementById('clientDetailName').textContent = `🏢 ${ decodedName } `;
+        document.getElementById('clientDetailName').textContent = `🏢 ${decodedName} `;
         document.getElementById('clientDriverCount').textContent = driverIds.length;
         document.getElementById('clientFreightCount').textContent = clientFreights.length;
         document.getElementById('clientReceivedValue').textContent = formatCurrency(receivedTotal);
@@ -2139,24 +2144,24 @@ window.viewClientDetails = async function (clientName) {
 // Toggle client_paid status for a freight (payment FROM client)
 window.toggleClientPaid = async function (freightId) {
     try {
-        await apiRequest(`/ admin / freights / ${ freightId }/toggle-client-paid`, {
-method: 'PATCH'
+        await apiRequest(`/ admin / freights / ${freightId}/toggle-client-paid`, {
+            method: 'PATCH'
         });
 
-// Reload freights and re-render
-await loadFreights();
+        // Reload freights and re-render
+        await loadFreights();
 
-// Re-open the same client detail view to refresh totals
-const clientName = document.getElementById('clientDetailName').textContent.replace('🏢 ', '');
-if (clientName) {
-    viewClientDetails(encodeURIComponent(clientName));
-}
+        // Re-open the same client detail view to refresh totals
+        const clientName = document.getElementById('clientDetailName').textContent.replace('🏢 ', '');
+        if (clientName) {
+            viewClientDetails(encodeURIComponent(clientName));
+        }
 
-renderClientsTable();
+        renderClientsTable();
     } catch (error) {
-    console.error('Toggle client paid error:', error);
-    alert('Erro ao atualizar pagamento: ' + error.message);
-}
+        console.error('Toggle client paid error:', error);
+        alert('Erro ao atualizar pagamento: ' + error.message);
+    }
 };
 
 // Upload comprovante de recebimento for a freight

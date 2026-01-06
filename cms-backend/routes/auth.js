@@ -5,7 +5,7 @@ const Admin = require('../models/admin');
 const Abastecedor = require('../models/abastecedor');
 const { isValidPlate, normalizePlate, isValidCPF } = require('../utils/validators');
 const { generateToken, verifyToken } = require('../middleware/auth');
-const { sendVerificationCode, verifyCode } = require('../utils/twilioService');
+const { sendWhatsAppVerificationCode, verifyWhatsAppCode } = require('../utils/twilioService');
 
 /**
  * POST /api/auth/driver/signup
@@ -329,15 +329,15 @@ router.post('/driver/forgot-password', async (req, res) => {
             return res.status(400).json({ error: 'Motorista não possui telefone cadastrado' });
         }
 
-        // Send verification code via Twilio
-        await sendVerificationCode(driver.phone);
+        // Send verification code via WhatsApp
+        await sendWhatsAppVerificationCode(driver.phone);
 
         // Mask phone number for response (show only last 4 digits)
         const maskedPhone = '***' + driver.phone.slice(-4);
 
         res.json({
             success: true,
-            message: 'Código enviado por SMS',
+            message: 'Código enviado por WhatsApp',
             phone: maskedPhone
         });
     } catch (error) {
@@ -367,8 +367,8 @@ router.post('/driver/verify-reset-code', async (req, res) => {
             return res.status(404).json({ error: 'CPF não encontrado' });
         }
 
-        // Verify code with Twilio
-        const result = await verifyCode(driver.phone, code);
+        // Verify code with WhatsApp
+        const result = await verifyWhatsAppCode(driver.phone, code);
 
         if (!result.valid) {
             return res.status(400).json({ error: 'Código inválido ou expirado' });
@@ -455,15 +455,15 @@ router.post('/abastecedor/forgot-password', async (req, res) => {
             return res.status(400).json({ error: 'Abastecedor não possui telefone cadastrado' });
         }
 
-        // Send verification code via Twilio
-        await sendVerificationCode(abastecedor.phone);
+        // Send verification code via WhatsApp
+        await sendWhatsAppVerificationCode(abastecedor.phone);
 
         // Mask phone number for response (show only last 4 digits)
         const maskedPhone = '***' + abastecedor.phone.slice(-4);
 
         res.json({
             success: true,
-            message: 'Código enviado por SMS',
+            message: 'Código enviado por WhatsApp',
             phone: maskedPhone
         });
     } catch (error) {
@@ -493,8 +493,8 @@ router.post('/abastecedor/verify-reset-code', async (req, res) => {
             return res.status(404).json({ error: 'CPF não encontrado' });
         }
 
-        // Verify code with Twilio
-        const result = await verifyCode(abastecedor.phone, code);
+        // Verify code with WhatsApp
+        const result = await verifyWhatsAppCode(abastecedor.phone, code);
 
         if (!result.valid) {
             return res.status(400).json({ error: 'Código inválido ou expirado' });

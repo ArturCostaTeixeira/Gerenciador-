@@ -1,7 +1,14 @@
-require('dotenv').config();
+const path = require('path');
+const dotenvPath = path.join(__dirname, '.env');
+console.log('Loading .env from:', dotenvPath);
+const result = require('dotenv').config({ path: dotenvPath });
+if (result.error) {
+    console.error('dotenv ERROR:', result.error);
+} else {
+    console.log('dotenv loaded successfully. Keys:', Object.keys(result.parsed || {}).join(', '));
+}
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
 
