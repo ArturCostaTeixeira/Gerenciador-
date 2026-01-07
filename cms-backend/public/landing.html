@@ -7,6 +7,21 @@
     <meta name="description"
         content="Logística especializada para o agronegócio e transporte de agregados para obras rodoviárias">
     <title>Excavanorth</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1a73e8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ExcavaNorth">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- PWA Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lusitana:wght@400;700&display=swap" rel="stylesheet">
@@ -14,22 +29,38 @@
 </head>
 
 <body>
-    <!-- Auth Navigation -->
-    <nav class="auth-nav">
-        <a href="/admin" class="auth-btn btn-login" id="adminPortalLink">Portal do Administrador</a>
-        <a href="/abastecedor" class="auth-btn btn-login" id="abastecedorPortalLink">Portal do Abastecedor</a>
-        <a href="/portal" class="auth-btn btn-login" id="driverPortalLink">Portal do Motorista</a>
+    <!-- Desktop Auth Navigation (hidden on mobile) -->
+    <nav class="auth-nav desktop-only">
+        <a href="/admin" class="auth-btn btn-login" id="adminPortalLinkDesktop">Portal do Administrador</a>
+        <a href="/abastecedor" class="auth-btn btn-login" id="abastecedorPortalLinkDesktop">Portal do Abastecedor</a>
+        <a href="/portal" class="auth-btn btn-login" id="driverPortalLinkDesktop">Portal do Motorista</a>
     </nav>
+
     <!-- Hero Section -->
     <section class="hero">
         <div class="hero-overlay"></div>
         <div class="hero-content">
-            <div class="logo">
+            <div class="logo desktop-only">
                 <img src="images/logo1.jpg" alt="Excavanorth Logo">
             </div>
             <h1>ExcavaNorth</h1>
             <p class="subtitle">Logística especializada para o agronegócio e transporte de agregados para obras
                 rodoviárias</p>
+
+            <!-- Mobile Only: Install App Button -->
+            <button class="install-app-btn mobile-only" id="installAppBtn">
+                <span class="install-text">Instalar aplicativo</span>
+                <div class="install-logo">
+                    <img src="images/logo1.jpg" alt="ExcavaNorth">
+                </div>
+            </button>
+
+            <!-- Mobile Only: Portal Navigation Buttons -->
+            <nav class="portal-nav mobile-only">
+                <a href="/portal" class="portal-btn" id="driverPortalLink">Portal do Motorista</a>
+                <a href="/abastecedor" class="portal-btn" id="abastecedorPortalLink">Portal do Abastecedor</a>
+                <a href="/admin" class="portal-btn" id="adminPortalLink">Portal do Administrador</a>
+            </nav>
         </div>
     </section>
 
@@ -161,6 +192,64 @@
                 cookieBanner.style.display = 'none';
             });
         });
+
+        // PWA Install Logic
+        let deferredPrompt;
+        const installBtn = document.getElementById('installAppBtn');
+
+        // Check if already installed
+        if (installBtn && window.matchMedia('(display-mode: standalone)').matches) {
+            installBtn.style.display = 'none';
+        }
+
+        // Listen for the beforeinstallprompt event
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            console.log('[PWA] Install prompt available');
+        });
+
+        // Handle install button click
+        if (installBtn) {
+            installBtn.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log('[PWA] User response:', outcome);
+                    deferredPrompt = null;
+                    if (outcome === 'accepted') {
+                        installBtn.style.display = 'none';
+                    }
+                } else {
+                    // Fallback for manual install
+                    alert('Para instalar o aplicativo:\n\n' +
+                        '📱 No celular: Toque no menu (⋮) e selecione "Adicionar à tela inicial"\n\n' +
+                        '💻 No computador: Clique no ícone de instalação na barra de endereço');
+                }
+            });
+        }
+
+        // Hide button if app is installed
+        window.addEventListener('appinstalled', () => {
+            console.log('[PWA] App was installed');
+            if (installBtn) {
+                installBtn.style.display = 'none';
+            }
+            deferredPrompt = null;
+        });
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('[PWA] Service Worker registered:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('[PWA] Service Worker registration failed:', error);
+                    });
+            });
+        }
     </script>
 </body>
 

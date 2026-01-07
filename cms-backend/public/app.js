@@ -1536,4 +1536,41 @@ document.addEventListener('DOMContentLoaded', () => {
     initPasswordToggle();
 });
 
+// ========================================
+// PWA Service Worker Registration
+// ========================================
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+            .then(registration => {
+                console.log('[PWA] Service Worker registered successfully:', registration.scope);
+
+                // Check for updates
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // New content available, show update notification
+                            console.log('[PWA] New version available! Refresh to update.');
+                            showToast('Nova versão disponível! Recarregue a página para atualizar.', 'info');
+                        }
+                    });
+                });
+            })
+            .catch(error => {
+                console.log('[PWA] Service Worker registration failed:', error);
+            });
+    });
+}
+
+// Handle PWA install prompt
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent Chrome 67+ from automatically showing the prompt
+    e.preventDefault();
+    // Stash the event so it can be triggered later
+    deferredPrompt = e;
+    console.log('[PWA] Install prompt available');
+});
 

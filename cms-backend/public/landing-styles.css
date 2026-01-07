@@ -32,6 +32,25 @@ ul {
     padding-left: 1.5rem;
 }
 
+/* Visibility Helpers */
+.desktop-only {
+    display: none;
+}
+
+.mobile-only {
+    display: flex;
+}
+
+@media (min-width: 769px) {
+    .desktop-only {
+        display: flex;
+    }
+
+    .mobile-only {
+        display: none !important;
+    }
+}
+
 /* Hero Section */
 .hero {
     position: relative;
@@ -87,6 +106,171 @@ ul {
     max-width: 600px;
     margin: 0 auto;
     line-height: 1;
+}
+
+/* ================================
+   MOBILE LAYOUT (Install Button + Vertical Portal Nav)
+   ================================ */
+@media (max-width: 768px) {
+    .hero-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 2rem;
+        min-height: 100vh;
+        justify-content: flex-start;
+    }
+
+    .hero h1 {
+        font-size: 2.5rem;
+        color: white;
+        margin-bottom: 0.5rem;
+    }
+
+    .hero .subtitle {
+        font-size: 0.95rem;
+        color: white;
+        margin-bottom: 2rem;
+        line-height: 1.3;
+    }
+
+    .hero-overlay {
+        background-color: rgba(250, 250, 250, 0.3);
+    }
+}
+
+/* Install App Button (Mobile Only) */
+.install-app-btn {
+    background-color: #ed1d23;
+    border: none;
+    border-radius: 20px;
+    padding: 1rem 2rem 1.5rem;
+    cursor: pointer;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 6px 20px rgba(198, 40, 40, 0.4);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    min-width: 200px;
+}
+
+.install-app-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(198, 40, 40, 0.5);
+}
+
+.install-app-btn:active {
+    transform: translateY(-1px);
+}
+
+.install-text {
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: 'Lusitana', Georgia, serif;
+    letter-spacing: 0.02em;
+}
+
+.install-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.install-logo img {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    object-fit: cover;
+}
+
+.install-logo .logo-text {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.7rem;
+    font-style: italic;
+}
+
+/* Portal Navigation (Mobile Only - Vertical) */
+.portal-nav {
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    max-width: 300px;
+    margin-top: 1rem;
+}
+
+.portal-btn {
+    background-color: rgba(80, 80, 90, 0.75);
+    color: #fff;
+    padding: 1rem 2rem;
+    border-radius: 30px;
+    font-size: 1rem;
+    font-weight: 500;
+    text-align: center;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.portal-btn:hover {
+    background-color: rgba(100, 100, 110, 0.85);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.portal-btn:active {
+    transform: translateY(0);
+}
+
+/* ================================
+   DESKTOP LAYOUT (Original Top-Right Navigation)
+   ================================ */
+
+/* Auth Navigation Buttons (Desktop) */
+.auth-nav {
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+    z-index: 1000;
+    gap: 1rem;
+}
+
+.auth-btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.5rem;
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: inherit;
+}
+
+.btn-login {
+    background-color: rgba(44, 47, 125, 0.8);
+    color: #fff;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+.btn-login:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: #fff;
+}
+
+.btn-signup {
+    background-color: #455A64;
+    color: #fff;
+    border: 2px solid #455A64;
+}
+
+.btn-signup:hover {
+    background-color: #546E7A;
+    border-color: #546E7A;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(84, 110, 122, 0.4);
 }
 
 /* About Section */
@@ -373,9 +557,6 @@ ul {
 
 /* Responsive Design */
 @media (max-width: 900px) {
-    .hero h1 {
-        font-size: 2.5rem;
-    }
 
     .about-content,
     .services-content,
@@ -421,67 +602,20 @@ ul {
     .whatsapp-button {
         bottom: 1.5rem;
         right: 1.5rem;
-        width: 48px;
-        height: 48px;
-    }
-}
-
-/* Auth Navigation Buttons */
-.auth-nav {
-    position: absolute;
-    top: 2rem;
-    right: 2rem;
-    z-index: 1000;
-    display: flex;
-    gap: 1rem;
-}
-
-.auth-btn {
-    padding: 0.75rem 1.5rem;
-    font-size: 0.5rem;
-    font-weight: 700;
-    text-decoration: none;
-    border-radius: 4px;
-    transition: all 0.3s ease;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-family: inherit;
-}
-
-.btn-login {
-    background-color: rgba(44, 47, 125, 0.8);
-    color: #fff;
-    border: 2px solid rgba(255, 255, 255, 0.5);
-}
-
-.btn-login:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-color: #fff;
-}
-
-.btn-signup {
-    background-color: #455A64;
-    /* Matching the theme */
-    color: #fff;
-    border: 2px solid #455A64;
-}
-
-.btn-signup:hover {
-    background-color: #546E7A;
-    border-color: #546E7A;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(84, 110, 122, 0.4);
-}
-
-@media (max-width: 600px) {
-    .auth-nav {
-        top: 1rem;
-        right: 1rem;
-        gap: 0.5rem;
+        padding: 0.6rem 1rem;
     }
 
-    .auth-btn {
-        padding: 0.5rem 1rem;
+    .whatsapp-text {
         font-size: 0.8rem;
+    }
+
+    .install-app-btn {
+        padding: 0.875rem 1.5rem 1.25rem;
+        min-width: 180px;
+    }
+
+    .portal-btn {
+        padding: 0.875rem 1.5rem;
+        font-size: 0.95rem;
     }
 }
