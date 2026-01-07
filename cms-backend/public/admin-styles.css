@@ -474,7 +474,7 @@ select.filter-input,
 
 .data-table th,
 .data-table td {
-    padding: 1rem;
+    padding: 1rem 0.75rem;
     text-align: left;
     border-bottom: 1px solid var(--border-color);
 }
