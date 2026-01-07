@@ -1225,6 +1225,32 @@ select.filter-input,
     background: rgba(239, 68, 68, 0.3);
 }
 
+/* Pulsing danger button for password reset requests */
+.btn-danger.btn-pulse {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    border: none;
+    animation: pulse-danger 1.5s ease-in-out infinite;
+}
+
+.btn-danger.btn-pulse:hover {
+    animation: none;
+    transform: translateY(-1px);
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+}
+
+@keyframes pulse-danger {
+
+    0%,
+    100% {
+        box-shadow: 0 0 5px rgba(239, 68, 68, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.8), 0 0 30px rgba(239, 68, 68, 0.4);
+    }
+}
+
 #editAdditionalPlatesList {
     margin-bottom: 0.5rem;
 }

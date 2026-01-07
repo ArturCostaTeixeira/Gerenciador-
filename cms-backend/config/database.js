@@ -326,6 +326,14 @@ async function initDatabase() {
         // Column already exists, ignore
     }
 
+    // Add password_reset_requested column to drivers for tracking reset requests
+    try {
+        await exec(`ALTER TABLE drivers ADD COLUMN password_reset_requested INTEGER DEFAULT 0`);
+        console.log('Added password_reset_requested column to drivers');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
     // Create default admin if not exists
     const adminExists = await queryOne('SELECT id FROM admins WHERE username = ?', ['admin']);
     if (!adminExists) {

@@ -83,6 +83,10 @@
                         <span class="nav-icon">📊</span>
                         <span class="nav-text">Extratos (Motorista)</span>
                     </button>
+                    <button class="nav-item" data-page="extratosCaminhoes">
+                        <span class="nav-icon">🚛</span>
+                        <span class="nav-text">Extratos (Caminhões)</span>
+                    </button>
                 </nav>
                 <div class="sidebar-footer">
                     <button id="logoutBtn" class="btn btn-outline btn-full">Sair</button>
@@ -111,6 +115,7 @@
                                     <th>Placa</th>
                                     <th>Status</th>
                                     <th>Autenticação</th>
+                                    <th>Reset Senha</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -707,6 +712,109 @@
                                     </tr>
                                 </thead>
                                 <tbody id="adminExtratoPagamentosBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Extratos (Caminhões) Page -->
+                <section id="extratosCaminhoesPage" class="content-page hidden">
+                    <div class="page-header">
+                        <h1>🚛 Extratos (Caminhões)</h1>
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <select id="extratoPlateSelect" class="filter-input" style="max-width: 300px;">
+                                <option value="">Selecione uma placa</option>
+                            </select>
+                            <button class="btn btn-primary" id="exportExtratoPlateBtn" style="display: none;">📄
+                                Exportar
+                                PDF</button>
+                        </div>
+                    </div>
+
+                    <div id="extratoPlaceholderPlate" class="card glass" style="text-align: center; padding: 3rem;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🚛</div>
+                        <p style="color: var(--text-muted);">Selecione uma placa para visualizar o extrato</p>
+                    </div>
+
+                    <div id="extratoPlateContent" style="display: none;">
+                        <!-- Summary Cards -->
+                        <div class="summary-cards" style="margin-bottom: 1.5rem;">
+                            <div class="card summary-card glass">
+                                <div class="card-icon">📦</div>
+                                <div class="card-content">
+                                    <span class="card-label">Total Fretes</span>
+                                    <span class="card-value value-positive" id="plateExtratoFretes">R$ 0,00</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass">
+                                <div class="card-icon">⛽</div>
+                                <div class="card-content">
+                                    <span class="card-label">Abastecimentos</span>
+                                    <span class="card-value value-negative" id="plateExtratoAbast">-R$ 0,00</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass">
+                                <div class="card-icon">📋</div>
+                                <div class="card-content">
+                                    <span class="card-label">Outros Insumos</span>
+                                    <span class="card-value value-negative" id="plateExtratoInsumos">-R$ 0,00</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass highlight">
+                                <div class="card-icon">💰</div>
+                                <div class="card-content">
+                                    <span class="card-label">Faturamento Líquido</span>
+                                    <span class="card-value" id="plateExtratoLiquido">R$ 0,00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Fretes Section -->
+                        <div class="card glass" style="margin-bottom: 1rem;">
+                            <h3 style="margin-bottom: 1rem;">📦 Fretes</h3>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>KM</th>
+                                        <th>Tons</th>
+                                        <th>Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="plateExtratoFretesBody"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Abastecimentos Section -->
+                        <div class="card glass" style="margin-bottom: 1rem;">
+                            <h3 style="margin-bottom: 1rem;">⛽ Abastecimentos</h3>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Litros</th>
+                                        <th>Preço/L</th>
+                                        <th>Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="plateExtratoAbastBody"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Outros Insumos Section -->
+                        <div class="card glass">
+                            <h3 style="margin-bottom: 1rem;">📋 Outros Insumos</h3>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Qtd</th>
+                                        <th>Descrição</th>
+                                        <th>Preço Un.</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="plateExtratoInsumosBody"></tbody>
                             </table>
                         </div>
                     </div>

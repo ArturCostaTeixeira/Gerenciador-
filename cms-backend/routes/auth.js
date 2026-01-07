@@ -553,8 +553,8 @@ router.post('/abastecedor/reset-password', async (req, res) => {
 
 /**
  * POST /api/auth/driver/reset-password-cpf
- * Alternative password reset - sets password to first 4 digits of CPF
- * For users who can't receive SMS
+ * Request password reset when user can't receive SMS
+ * Sets a flag to notify admin that driver needs password reset
  */
 router.post('/driver/reset-password-cpf', async (req, res) => {
     try {
@@ -576,17 +576,16 @@ router.post('/driver/reset-password-cpf', async (req, res) => {
             return res.status(404).json({ error: 'CPF não encontrado' });
         }
 
-        // Set password to first 4 digits of CPF
-        const newPassword = cleanCpf.substring(0, 4);
-        await Driver.updatePassword(driver.id, newPassword);
+        // Set password_reset_requested flag to 1
+        await Driver.update(driver.id, { password_reset_requested: true });
 
         res.json({
             success: true,
-            message: 'Senha redefinida com sucesso'
+            message: 'Solicitação de redefinição de senha enviada ao administrador'
         });
     } catch (error) {
         console.error('Reset password CPF error:', error);
-        res.status(500).json({ error: 'Erro ao redefinir senha' });
+        res.status(500).json({ error: 'Erro ao solicitar redefinição de senha' });
     }
 });
 

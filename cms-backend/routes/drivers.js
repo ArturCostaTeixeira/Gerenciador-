@@ -229,4 +229,37 @@ router.patch('/:id/authenticate', async (req, res) => {
     }
 });
 
+/**
+ * PATCH /api/admin/drivers/:id/reset-password
+ * Admin resets driver password to first 4 digits of CPF
+ * Also clears the password_reset_requested flag
+ */
+router.patch('/:id/reset-password', async (req, res) => {
+    try {
+        const driver = await Driver.findById(req.params.id);
+        if (!driver) {
+            return res.status(404).json({ error: 'Driver not found' });
+        }
+
+        if (!driver.cpf) {
+            return res.status(400).json({ error: 'Motorista não possui CPF cadastrado' });
+        }
+
+        // Set password to first 4 digits of CPF
+        const newPassword = driver.cpf.substring(0, 4);
+        await Driver.updatePassword(driver.id, newPassword);
+
+        // Clear the password_reset_requested flag
+        await Driver.update(driver.id, { password_reset_requested: false });
+
+        res.json({
+            success: true,
+            message: 'Senha redefinida com sucesso para os 4 primeiros dígitos do CPF'
+        });
+    } catch (error) {
+        console.error('Admin reset password error:', error);
+        res.status(500).json({ error: 'Erro ao redefinir senha' });
+    }
+});
+
 module.exports = router;

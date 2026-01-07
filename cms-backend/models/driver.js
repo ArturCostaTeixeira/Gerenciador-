@@ -116,7 +116,7 @@ const Driver = {
      * @returns {Object|null} - Updated driver or null
      */
     async update(id, data) {
-        const { name, plate, plates, price_per_km_ton, client, active, phone, cpf, authenticated } = data;
+        const { name, plate, plates, price_per_km_ton, client, active, phone, cpf, authenticated, password_reset_requested } = data;
         const updates = [];
         const values = [];
 
@@ -155,6 +155,10 @@ const Driver = {
         if (authenticated !== undefined) {
             updates.push('authenticated = ?');
             values.push(authenticated ? 1 : 0);
+        }
+        if (password_reset_requested !== undefined) {
+            updates.push('password_reset_requested = ?');
+            values.push(password_reset_requested ? 1 : 0);
         }
 
         if (updates.length === 0) return this.findById(id);

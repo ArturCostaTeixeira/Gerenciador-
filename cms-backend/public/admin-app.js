@@ -155,6 +155,7 @@ async function loadDashboard() {
         await loadAbastecimentos();
         await loadOutrosInsumos();
         await loadClients(); // Load clients after freights so renderClientsTable has access to allFreights
+        populateExtratoPlateSelect(); // Populate plate selector for truck extratos
         await loadUnassignedComprovantes();
         await loadUnassignedComprovantesCarga();
         await loadUnassignedComprovantesAbast();
@@ -183,6 +184,7 @@ function startPolling() {
                 loadUnassignedComprovantesAbast(),
                 loadUnpaidTotals()
             ]);
+            populateExtratoPlateSelect(); // Keep plate dropdown updated
         } catch (error) {
             console.error('Polling error:', error);
         }
@@ -311,7 +313,7 @@ function renderDriversTable(filter = '') {
     };
 
     tbody.innerHTML = filtered.length === 0
-        ? '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">Nenhum usuário encontrado</td></tr>'
+        ? '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">Nenhum usuário encontrado</td></tr>'
         : filtered.map(u => {
             const isMotorista = u.userType === 'motorista';
 
@@ -328,6 +330,19 @@ function renderDriversTable(filter = '') {
                     authCell = '<span class="status-badge status-authenticated">Autenticado</span>';
                 } else {
                     authCell = `<button class="btn btn-sm btn-warning" onclick="authenticateDriver(${u.id})">Autenticar</button>`;
+                }
+            }
+
+            // Reset Password cell - only for drivers
+            let resetPasswordCell = '-';
+            if (isMotorista) {
+                const hasResetRequest = u.password_reset_requested === 1 || u.password_reset_requested === true;
+                if (hasResetRequest) {
+                    // Show red/warning button when reset is requested
+                    resetPasswordCell = `<button class="btn btn-sm btn-danger btn-pulse" onclick="resetDriverPassword(${u.id})" title="Clique para redefinir a senha">🔔 Resetar</button>`;
+                } else {
+                    // Normal outline button
+                    resetPasswordCell = `<button class="btn btn-sm btn-outline" onclick="resetDriverPassword(${u.id})" title="Redefinir senha para os 4 primeiros dígitos do CPF">🔑 Resetar</button>`;
                 }
             }
 
@@ -365,6 +380,7 @@ function renderDriversTable(filter = '') {
                 <td class="plates-cell" style="white-space:nowrap;">${platesDisplay}</td>
                 <td><span class="${u.active ? 'status-active' : 'status-inactive'}">${u.active ? 'Ativo' : 'Inativo'}</span></td>
                 <td>${authCell}</td>
+                <td>${resetPasswordCell}</td>
                 <td>${actions}</td>
             </tr>
         `}).join('');
@@ -380,6 +396,30 @@ window.authenticateDriver = async function (id) {
     } catch (error) {
         console.error('Authenticate driver error:', error);
         alert('Erro ao autenticar motorista: ' + error.message);
+    }
+};
+
+// Reset driver password to first 4 digits of CPF
+window.resetDriverPassword = async function (id) {
+    const driver = drivers.find(d => d.id === id);
+    if (!driver) return;
+
+    const hasRequest = driver.password_reset_requested === 1 || driver.password_reset_requested === true;
+    const confirmMessage = hasRequest
+        ? `O motorista "${driver.name}" solicitou redefinição de senha.\n\nDeseja redefinir a senha para os 4 primeiros dígitos do CPF?`
+        : `Deseja redefinir a senha de "${driver.name}" para os 4 primeiros dígitos do CPF?`;
+
+    if (!confirm(confirmMessage)) return;
+
+    try {
+        await apiRequest(`/admin/drivers/${id}/reset-password`, {
+            method: 'PATCH'
+        });
+        alert(`Senha de "${driver.name}" redefinida com sucesso!`);
+        await loadDrivers();
+    } catch (error) {
+        console.error('Reset password error:', error);
+        alert('Erro ao redefinir senha: ' + error.message);
     }
 };
 
@@ -3427,6 +3467,248 @@ async function loadAdminExtrato(driverId) {
 }
 
 // ========================================
+// Extratos (Caminhões) Page
+// ========================================
+
+let selectedExtratoPlate = null;
+let cachedExtratoPlateData = null; // Cache for export
+
+function initExtratosCaminhoesPage() {
+    const plateSelect = document.getElementById('extratoPlateSelect');
+    const exportBtn = document.getElementById('exportExtratoPlateBtn');
+
+    if (plateSelect) {
+        plateSelect.addEventListener('change', (e) => {
+            const plate = e.target.value;
+            if (plate) {
+                selectedExtratoPlate = plate;
+                loadPlateExtrato(plate);
+                if (exportBtn) exportBtn.style.display = 'inline-flex';
+            } else {
+                selectedExtratoPlate = null;
+                document.getElementById('extratoPlateContent').style.display = 'none';
+                document.getElementById('extratoPlaceholderPlate').style.display = 'block';
+                if (exportBtn) exportBtn.style.display = 'none';
+            }
+        });
+    }
+
+    // PDF export for plates can be added later if needed
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportPlateExtratoPDF);
+    }
+}
+
+function populateExtratoPlateSelect() {
+    const select = document.getElementById('extratoPlateSelect');
+    if (!select) return;
+
+    // Collect all unique plates from freights, abastecimentos, and drivers
+    const platesSet = new Set();
+
+    // From freights
+    allFreights.forEach(f => {
+        if (f.plate) platesSet.add(f.plate.toUpperCase());
+    });
+
+    // From abastecimentos
+    allAbastecimentos.forEach(a => {
+        if (a.plate) platesSet.add(a.plate.toUpperCase());
+    });
+
+    // From drivers (their registered plates)
+    drivers.forEach(d => {
+        if (d.plate) platesSet.add(d.plate.toUpperCase());
+        if (d.plates) {
+            try {
+                const platesArr = typeof d.plates === 'string' ? JSON.parse(d.plates) : d.plates;
+                if (Array.isArray(platesArr)) {
+                    platesArr.forEach(p => platesSet.add(p.toUpperCase()));
+                }
+            } catch (e) { }
+        }
+    });
+
+    const plates = Array.from(platesSet).sort();
+
+    select.innerHTML = '<option value="">Selecione uma placa</option>' +
+        plates.map(p => `<option value="${p}">${p}</option>`).join('');
+}
+
+function loadPlateExtrato(plate) {
+    // Show content, hide placeholder
+    document.getElementById('extratoPlateContent').style.display = 'block';
+    document.getElementById('extratoPlaceholderPlate').style.display = 'none';
+
+    const normalizedPlate = plate.toUpperCase();
+
+    // Filter data by plate
+    const plateFreights = allFreights.filter(f =>
+        f.status === 'complete' &&
+        (f.plate?.toUpperCase() === normalizedPlate)
+    );
+
+    const plateAbast = allAbastecimentos.filter(a =>
+        a.plate?.toUpperCase() === normalizedPlate
+    );
+
+    // For outros insumos, we need to find driver_ids associated with this plate
+    // Since outros_insumos doesn't have a plate field, we'll check if the driver has this plate
+    const driverIdsWithPlate = new Set();
+    drivers.forEach(d => {
+        if (d.plate?.toUpperCase() === normalizedPlate) {
+            driverIdsWithPlate.add(d.id);
+        }
+        if (d.plates) {
+            try {
+                const platesArr = typeof d.plates === 'string' ? JSON.parse(d.plates) : d.plates;
+                if (Array.isArray(platesArr) && platesArr.some(p => p.toUpperCase() === normalizedPlate)) {
+                    driverIdsWithPlate.add(d.id);
+                }
+            } catch (e) { }
+        }
+    });
+
+    const plateInsumos = allOutrosInsumos.filter(oi => driverIdsWithPlate.has(oi.driver_id));
+
+    // Calculate stats
+    const totalFretes = plateFreights.reduce((sum, f) => sum + (f.total_value || 0), 0);
+    const totalAbast = plateAbast.reduce((sum, a) => sum + (a.total_value || 0), 0);
+    const totalInsumos = plateInsumos.reduce((sum, oi) => sum + (oi.total_value || 0), 0);
+
+    // Faturamento Líquido = Fretes - Abast - Insumos
+    const faturamentoLiquido = totalFretes - totalAbast - totalInsumos;
+
+    // Cache data for export
+    cachedExtratoPlateData = {
+        plate: normalizedPlate,
+        plateFreights,
+        plateAbast,
+        plateInsumos,
+        totals: { totalFretes, totalAbast, totalInsumos, faturamentoLiquido }
+    };
+
+
+    // Update summary cards
+    document.getElementById('plateExtratoFretes').textContent = formatCurrency(totalFretes);
+    document.getElementById('plateExtratoAbast').textContent = `-${formatCurrency(totalAbast)}`;
+    document.getElementById('plateExtratoInsumos').textContent = `-${formatCurrency(totalInsumos)}`;
+    document.getElementById('plateExtratoLiquido').textContent = formatCurrency(faturamentoLiquido);
+
+    // Color the "Faturamento Líquido" value
+    const liquidoEl = document.getElementById('plateExtratoLiquido');
+    liquidoEl.className = 'card-value ' + (faturamentoLiquido >= 0 ? 'value-positive' : 'value-negative');
+
+    // Render Fretes table (no proof columns, no driver)
+    const fretesBody = document.getElementById('plateExtratoFretesBody');
+    if (plateFreights.length === 0) {
+        fretesBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">Nenhum frete encontrado</td></tr>';
+    } else {
+        fretesBody.innerHTML = plateFreights.map(f => `
+            <tr>
+                <td>${formatDate(f.date)}</td>
+                <td>${formatNumber(f.km)}</td>
+                <td>${formatNumber(f.tons, 2)}</td>
+                <td class="value-positive">${formatCurrency(f.total_value)}</td>
+            </tr>
+        `).join('');
+    }
+
+    // Render Abastecimentos table (no proof column, no driver)
+    const abastBody = document.getElementById('plateExtratoAbastBody');
+    if (plateAbast.length === 0) {
+        abastBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">Nenhum abastecimento encontrado</td></tr>';
+    } else {
+        abastBody.innerHTML = plateAbast.map(a => `
+            <tr>
+                <td>${formatDate(a.date)}</td>
+                <td>${formatNumber(a.quantity)}</td>
+                <td>${formatCurrency(a.price_per_liter)}</td>
+                <td class="value-negative" style="white-space:nowrap;">-${formatCurrency(a.total_value)}</td>
+            </tr>
+        `).join('');
+    }
+
+    // Render Outros Insumos table (no driver)
+    const insumosBody = document.getElementById('plateExtratoInsumosBody');
+    if (plateInsumos.length === 0) {
+        insumosBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Nenhum insumo encontrado</td></tr>';
+    } else {
+        insumosBody.innerHTML = plateInsumos.map(oi => `
+            <tr>
+                <td>${formatDate(oi.date)}</td>
+                <td>${formatNumber(oi.quantity)}</td>
+                <td>${oi.description || '-'}</td>
+                <td>${formatCurrency(oi.unit_price)}</td>
+                <td class="value-negative" style="white-space:nowrap;">-${formatCurrency(oi.total_value)}</td>
+            </tr>
+        `).join('');
+    }
+}
+
+async function exportPlateExtratoPDF() {
+    if (!cachedExtratoPlateData) {
+        alert('Nenhum dado para exportar');
+        return;
+    }
+
+    const { plate, plateFreights, plateAbast, plateInsumos, totals } = cachedExtratoPlateData;
+
+    // Create a simple HTML-based PDF export
+    const printContent = `
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; color: #000; }
+                h1, h2 { color: #333; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+                th { background: #f0f0f0; }
+                .summary { display: flex; gap: 20px; margin-bottom: 20px; }
+                .summary-item { background: #f5f5f5; padding: 10px; border-radius: 5px; }
+                .positive { color: green; }
+                .negative { color: red; }
+            </style>
+        </head>
+        <body>
+            <h1>Extrato do Caminhão: ${plate}</h1>
+            <p>Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+            
+            <div class="summary">
+                <div class="summary-item"><strong>Total Fretes:</strong> R$ ${formatCurrency(totals.totalFretes)}</div>
+                <div class="summary-item"><strong>Abastecimentos:</strong> -R$ ${formatCurrency(totals.totalAbast)}</div>
+                <div class="summary-item"><strong>Outros Insumos:</strong> -R$ ${formatCurrency(totals.totalInsumos)}</div>
+                <div class="summary-item"><strong>Faturamento Líquido:</strong> R$ ${formatCurrency(totals.faturamentoLiquido)}</div>
+            </div>
+            
+            <h2>Fretes</h2>
+            <table>
+                <thead><tr><th>Data</th><th>KM</th><th>Tons</th><th>Valor</th></tr></thead>
+                <tbody>${plateFreights.map(f => `<tr><td>${formatDate(f.date)}</td><td>${formatNumber(f.km)}</td><td>${formatNumber(f.tons, 2)}</td><td class="positive">R$ ${formatCurrency(f.total_value)}</td></tr>`).join('')}</tbody>
+            </table>
+            
+            <h2>Abastecimentos</h2>
+            <table>
+                <thead><tr><th>Data</th><th>Litros</th><th>Preço/L</th><th>Valor</th></tr></thead>
+                <tbody>${plateAbast.map(a => `<tr><td>${formatDate(a.date)}</td><td>${formatNumber(a.quantity)}</td><td>R$ ${formatCurrency(a.price_per_liter)}</td><td class="negative">-R$ ${formatCurrency(a.total_value)}</td></tr>`).join('')}</tbody>
+            </table>
+            
+            <h2>Outros Insumos</h2>
+            <table>
+                <thead><tr><th>Data</th><th>Qtd</th><th>Descrição</th><th>Preço Un.</th><th>Total</th></tr></thead>
+                <tbody>${plateInsumos.map(oi => `<tr><td>${formatDate(oi.date)}</td><td>${formatNumber(oi.quantity)}</td><td>${oi.description || '-'}</td><td>R$ ${formatCurrency(oi.unit_price)}</td><td class="negative">-R$ ${formatCurrency(oi.total_value)}</td></tr>`).join('')}</tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.print();
+}
+
+// ========================================
 // Initialize
 // ========================================
 
@@ -3452,6 +3734,7 @@ function init() {
     initDriverPayments();
     initFinanceiroPage();
     initExtratosPage();
+    initExtratosCaminhoesPage();
 
     if (token) loadDashboard();
     else showPage(loginPage);
