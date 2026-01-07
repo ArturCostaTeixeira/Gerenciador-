@@ -17,7 +17,7 @@ const path = require('path');
 const fs = require('fs');
 
 const ICON_SIZES = [72, 96, 128, 144, 152, 192, 384, 512];
-const SOURCE_IMAGE = path.join(__dirname, 'public', 'logo_excava.png');
+const SOURCE_IMAGE = path.join(__dirname, 'public', 'new_logo.jpg');
 const OUTPUT_DIR = path.join(__dirname, 'public', 'icons');
 
 async function generateIcons() {
@@ -36,8 +36,8 @@ async function generateIcons() {
         try {
             await sharp(SOURCE_IMAGE)
                 .resize(size, size, {
-                    fit: 'contain',
-                    background: { r: 15, g: 20, b: 25, alpha: 1 } // Dark background matching theme
+                    fit: 'cover',
+                    position: 'center'
                 })
                 .png()
                 .toFile(outputPath);
