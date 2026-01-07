@@ -100,7 +100,7 @@
                     <!-- Forgot Password Form - Step 1: Enter CPF -->
                     <div id="forgotPasswordForm" class="form-section hidden">
                         <h2 class="form-title">Recuperar Senha</h2>
-                        <p class="form-subtitle">Digite seu CPF para receber um código por Whatsapp</p>
+                        <p class="form-subtitle">Digite seu CPF para receber um código por SMS</p>
                         <form id="forgotPasswordFormElement">
                             <div class="input-group">
                                 <label for="forgotCpf">CPF</label>
@@ -135,6 +135,7 @@
                         </form>
                         <div class="form-footer">
                             <p><a href="#" id="resendCode">Reenviar código</a></p>
+                            <p><a href="#" id="cantReceiveSms" class="secondary-link">Não consegue receber SMS?</a></p>
                             <p><a href="#" id="backToLoginFromVerify">← Voltar ao Login</a></p>
                         </div>
                     </div>
@@ -174,6 +175,21 @@
                         <div class="form-footer">
                             <p><a href="#" id="backToLoginFromReset">← Voltar ao Login</a></p>
                         </div>
+                    </div>
+
+                    <!-- CPF Reset Success Screen -->
+                    <div id="cpfResetSuccessForm" class="form-section hidden">
+                        <div class="success-icon">✅</div>
+                        <h2 class="form-title">Senha Redefinida!</h2>
+                        <p class="form-subtitle success-message">
+                            Sua senha foi redefinida para os <strong>primeiros 4 dígitos do seu CPF</strong>.
+                        </p>
+                        <p class="form-hint">Por exemplo, se seu CPF for 123.456.789-00, sua nova senha será
+                            <strong>1234</strong>.</p>
+                        <p class="form-hint warning">⚠️ Recomendamos que você altere sua senha após fazer login.</p>
+                        <button type="button" class="btn btn-primary btn-full" id="backToLoginFromCpfReset">
+                            <span>Voltar ao Login</span>
+                        </button>
                     </div>
 
                     <!-- Error Message -->

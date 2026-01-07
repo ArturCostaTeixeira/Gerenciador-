@@ -1116,3 +1116,65 @@ body {
         width: 100%;
     }
 }
+
+/* CPF Reset Success Form */
+.success-icon {
+    font-size: 4rem;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    animation: successPop 0.5s ease;
+}
+
+@keyframes successPop {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+
+    50% {
+        transform: scale(1.2);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.form-hint {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    text-align: center;
+    margin-bottom: 0.75rem;
+}
+
+.form-hint.warning {
+    color: var(--warning);
+    background: rgba(245, 158, 11, 0.1);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    margin-top: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-hint strong {
+    color: var(--text-primary);
+}
+
+.success-message {
+    font-size: 1rem;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+}
+
+.secondary-link {
+    color: var(--text-muted) !important;
+    font-size: 0.85rem;
+    text-decoration: underline !important;
+    transition: color var(--transition-fast);
+}
+
+.secondary-link:hover {
+    color: var(--warning) !important;
+}

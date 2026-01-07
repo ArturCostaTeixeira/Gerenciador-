@@ -59,82 +59,138 @@ function formatToWhatsApp(phoneNumber) {
 }
 
 /**
- * Send verification code via WhatsApp
+ * Send verification code via SMS using Twilio Verify
+ * Uses SMS channel for verification
  * @param {string} phoneNumber - Phone number (e.g., 69992042544)
  * @returns {Promise<object>} - Result
  */
 async function sendWhatsAppVerificationCode(phoneNumber) {
     try {
-        // Generate 6-digit code
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        // Format phone number with country code
+        let cleanPhone = phoneNumber.replace(/\D/g, '');
+        if (!cleanPhone.startsWith('55')) {
+            cleanPhone = '55' + cleanPhone;
+        }
+        const formattedPhone = '+' + cleanPhone;
 
-        // Format phone for WhatsApp
-        const formattedPhone = formatToWhatsApp(phoneNumber);
+        console.log(`Sending SMS verification to: ${formattedPhone}`);
 
-        console.log(`Sending WhatsApp verification to: ${formattedPhone}`);
+        const serviceSid = getVerifyServiceSid();
+        if (!serviceSid) {
+            throw new Error('TWILIO_SERVICE_ID not configured');
+        }
 
-        // Send WhatsApp message
-        const message = await getTwilioClient().messages.create({
-            from: getWhatsAppFrom(),
-            to: formattedPhone,
-            body: `🔐 Seu código de verificação é: *${code}*\n\nVálido por 5 minutos.\n\nSe você não solicitou este código, ignore esta mensagem.`
-        });
+        // Use Twilio Verify API with SMS channel
+        const verification = await getTwilioClient().verify.v2
+            .services(serviceSid)
+            .verifications
+            .create({ to: formattedPhone, channel: 'sms' });
 
-        console.log(`WhatsApp message sent: ${message.sid}`);
-
-        // Store code with 5-minute expiration
-        whatsappVerificationCodes.set(formattedPhone, {
-            code: code,
-            expires: Date.now() + 5 * 60 * 1000 // 5 minutes
-        });
-
-        return { success: true, sid: message.sid };
+        console.log(`SMS verification sent: ${verification.sid}, status: ${verification.status}`);
+        return { success: true, sid: verification.sid, channel: 'sms', status: verification.status };
     } catch (error) {
-        console.error('Twilio WhatsApp send error:', error);
+        console.error('Verification send error:', error);
+        throw error;
+    }
+}
+
+
+
+/**
+ * Fallback: Send verification code via SMS
+ */
+async function sendVerificationCodeSMS(phoneNumber) {
+    try {
+        let formattedPhone = phoneNumber.replace(/\D/g, '');
+        if (!formattedPhone.startsWith('55')) {
+            formattedPhone = '55' + formattedPhone;
+        }
+        formattedPhone = '+' + formattedPhone;
+
+        console.log(`Sending SMS verification to: ${formattedPhone}`);
+
+        const verification = await getTwilioClient().verify.v2
+            .services(getVerifyServiceSid())
+            .verifications
+            .create({ to: formattedPhone, channel: 'sms' });
+
+        console.log(`SMS verification sent: ${verification.sid}, status: ${verification.status}`);
+        return { success: true, sid: verification.sid, status: verification.status };
+    } catch (error) {
+        console.error('SMS send error:', error);
         throw error;
     }
 }
 
 /**
- * Verify WhatsApp code entered by user
+ * Verify code entered by user
+ * First checks in-memory codes (for WhatsApp), then falls back to Twilio Verify (for SMS)
  * @param {string} phoneNumber - Phone number
  * @param {string} code - 6-digit verification code
  * @returns {Promise<object>} - Verification result
  */
 async function verifyWhatsAppCode(phoneNumber, code) {
     try {
-        const formattedPhone = formatToWhatsApp(phoneNumber);
+        // Format phone number with country code
+        let formattedPhone = phoneNumber.replace(/\D/g, '');
+        if (!formattedPhone.startsWith('55')) {
+            formattedPhone = '55' + formattedPhone;
+        }
+        formattedPhone = '+' + formattedPhone;
 
-        console.log(`Verifying WhatsApp code for: ${formattedPhone}`);
+        console.log(`Verifying code for: ${formattedPhone}`);
 
+        // First, check in-memory codes (used for WhatsApp template messages)
         const storedData = whatsappVerificationCodes.get(formattedPhone);
 
-        if (!storedData) {
-            console.log('No verification code found for this number');
+        if (storedData) {
+            console.log('Found in-memory verification code (WhatsApp)');
+
+            if (storedData.expires < Date.now()) {
+                console.log('Code expired');
+                whatsappVerificationCodes.delete(formattedPhone);
+                return { valid: false, status: 'expired' };
+            }
+
+            if (storedData.code === code) {
+                console.log('Code verified successfully (WhatsApp)');
+                whatsappVerificationCodes.delete(formattedPhone);
+                return { valid: true, status: 'approved' };
+            } else {
+                console.log('Invalid code');
+                return { valid: false, status: 'invalid' };
+            }
+        }
+
+        // Fallback: Check with Twilio Verify API (used for SMS)
+        console.log('Checking with Twilio Verify API (SMS)');
+
+        const verificationCheck = await getTwilioClient().verify.v2
+            .services(getVerifyServiceSid())
+            .verificationChecks
+            .create({ to: formattedPhone, code: code });
+
+        console.log(`Verification check: ${verificationCheck.status}`);
+
+        return {
+            valid: verificationCheck.status === 'approved',
+            status: verificationCheck.status
+        };
+    } catch (error) {
+        console.error('Verify code error:', error);
+
+        // If code is wrong or expired, Twilio throws an error
+        if (error.code === 20404) {
             return { valid: false, status: 'not_found' };
         }
-
-        if (storedData.expires < Date.now()) {
-            console.log('Verification code expired');
-            whatsappVerificationCodes.delete(formattedPhone);
-            return { valid: false, status: 'expired' };
+        if (error.code === 60202) {
+            return { valid: false, status: 'max_attempts_reached' };
         }
 
-        if (storedData.code !== code) {
-            console.log('Invalid verification code');
-            return { valid: false, status: 'invalid' };
-        }
-
-        // Code is valid - remove it to prevent reuse
-        whatsappVerificationCodes.delete(formattedPhone);
-        console.log('WhatsApp code verified successfully');
-
-        return { valid: true, status: 'approved' };
-    } catch (error) {
-        console.error('WhatsApp verify code error:', error);
         throw error;
     }
 }
+
 
 /**
  * Send verification code via SMS (legacy)

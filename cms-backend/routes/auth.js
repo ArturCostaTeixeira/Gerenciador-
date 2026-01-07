@@ -329,15 +329,16 @@ router.post('/driver/forgot-password', async (req, res) => {
             return res.status(400).json({ error: 'Motorista não possui telefone cadastrado' });
         }
 
-        // Send verification code via WhatsApp
-        await sendWhatsAppVerificationCode(driver.phone);
+        // Send verification code via WhatsApp or SMS
+        const result = await sendWhatsAppVerificationCode(driver.phone);
 
         // Mask phone number for response (show only last 4 digits)
         const maskedPhone = '***' + driver.phone.slice(-4);
+        const channelMessage = result.channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
 
         res.json({
             success: true,
-            message: 'Código enviado por WhatsApp',
+            message: `Código enviado por ${channelMessage}`,
             phone: maskedPhone
         });
     } catch (error) {
@@ -455,15 +456,16 @@ router.post('/abastecedor/forgot-password', async (req, res) => {
             return res.status(400).json({ error: 'Abastecedor não possui telefone cadastrado' });
         }
 
-        // Send verification code via WhatsApp
-        await sendWhatsAppVerificationCode(abastecedor.phone);
+        // Send verification code via WhatsApp or SMS
+        const result = await sendWhatsAppVerificationCode(abastecedor.phone);
 
         // Mask phone number for response (show only last 4 digits)
         const maskedPhone = '***' + abastecedor.phone.slice(-4);
+        const channelMessage = result.channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
 
         res.json({
             success: true,
-            message: 'Código enviado por WhatsApp',
+            message: `Código enviado por ${channelMessage}`,
             phone: maskedPhone
         });
     } catch (error) {
@@ -546,6 +548,45 @@ router.post('/abastecedor/reset-password', async (req, res) => {
     } catch (error) {
         console.error('Abastecedor reset password error:', error);
         res.status(500).json({ error: 'Erro ao alterar senha' });
+    }
+});
+
+/**
+ * POST /api/auth/driver/reset-password-cpf
+ * Alternative password reset - sets password to first 4 digits of CPF
+ * For users who can't receive SMS
+ */
+router.post('/driver/reset-password-cpf', async (req, res) => {
+    try {
+        const { cpf } = req.body;
+
+        if (!cpf) {
+            return res.status(400).json({ error: 'CPF é obrigatório' });
+        }
+
+        // Clean CPF
+        const cleanCpf = cpf.replace(/\D/g, '');
+        if (cleanCpf.length !== 11) {
+            return res.status(400).json({ error: 'CPF inválido' });
+        }
+
+        // Find driver
+        const driver = await Driver.findByCpf(cleanCpf);
+        if (!driver) {
+            return res.status(404).json({ error: 'CPF não encontrado' });
+        }
+
+        // Set password to first 4 digits of CPF
+        const newPassword = cleanCpf.substring(0, 4);
+        await Driver.updatePassword(driver.id, newPassword);
+
+        res.json({
+            success: true,
+            message: 'Senha redefinida com sucesso'
+        });
+    } catch (error) {
+        console.error('Reset password CPF error:', error);
+        res.status(500).json({ error: 'Erro ao redefinir senha' });
     }
 });
 

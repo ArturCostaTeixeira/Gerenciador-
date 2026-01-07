@@ -1145,6 +1145,8 @@ function showLoginForm() {
     document.getElementById('forgotPasswordForm').classList.add('hidden');
     document.getElementById('verifyCodeForm').classList.add('hidden');
     document.getElementById('resetPasswordForm').classList.add('hidden');
+    const cpfResetSuccess = document.getElementById('cpfResetSuccessForm');
+    if (cpfResetSuccess) cpfResetSuccess.classList.add('hidden');
     hideError();
     resetCpf = '';
     resetCode = '';
@@ -1267,6 +1269,34 @@ async function handleResendCode() {
     }
 }
 
+function showCpfResetSuccessForm() {
+    document.getElementById('forgotPasswordForm').classList.add('hidden');
+    document.getElementById('verifyCodeForm').classList.add('hidden');
+    document.getElementById('resetPasswordForm').classList.add('hidden');
+    document.getElementById('cpfResetSuccessForm').classList.remove('hidden');
+    hideError();
+}
+
+async function handleCpfReset() {
+    if (!resetCpf) {
+        showError('CPF não encontrado. Por favor, tente novamente.');
+        showForgotPasswordForm();
+        return;
+    }
+
+    try {
+        await apiRequest('/auth/driver/reset-password-cpf', {
+            method: 'POST',
+            body: JSON.stringify({ cpf: resetCpf })
+        });
+
+        showCpfResetSuccessForm();
+    } catch (error) {
+        showError(error.message);
+    }
+}
+
+
 // ========================================
 // Initialize App
 // ========================================
@@ -1322,6 +1352,18 @@ function init() {
     const resendCodeLink = document.getElementById('resendCode');
     if (resendCodeLink) {
         resendCodeLink.addEventListener('click', (e) => { e.preventDefault(); handleResendCode(); });
+    }
+
+    // Can't receive SMS - CPF reset option
+    const cantReceiveSmsLink = document.getElementById('cantReceiveSms');
+    if (cantReceiveSmsLink) {
+        cantReceiveSmsLink.addEventListener('click', (e) => { e.preventDefault(); handleCpfReset(); });
+    }
+
+    // Back to login from CPF reset success
+    const backToLoginFromCpfReset = document.getElementById('backToLoginFromCpfReset');
+    if (backToLoginFromCpfReset) {
+        backToLoginFromCpfReset.addEventListener('click', (e) => { e.preventDefault(); showLoginForm(); });
     }
 
     // Waiting page logout button
