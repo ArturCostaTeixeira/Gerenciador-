@@ -1294,3 +1294,48 @@ select.filter-input,
 .pdf-print-mode .summary-card.highlight {
     background: #f0f0f0 !important;
 }
+
+/* ========================================
+   Extratos Hub Navigation Cards
+   ======================================== */
+.extratos-nav-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    padding: 1rem 0;
+}
+
+.extrato-nav-card {
+    padding: 2rem;
+    border-radius: var(--radius-xl);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    text-align: center;
+}
+
+.extrato-nav-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(99, 102, 241, 0.2);
+    border-color: var(--accent-primary);
+}
+
+.extrato-nav-icon {
+    font-size: 3.5rem;
+    margin-bottom: 1rem;
+}
+
+.extrato-nav-card h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.extrato-nav-card p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}

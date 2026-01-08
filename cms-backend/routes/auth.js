@@ -3,6 +3,7 @@ const router = express.Router();
 const Driver = require('../models/driver');
 const Admin = require('../models/admin');
 const Abastecedor = require('../models/abastecedor');
+const Cliente = require('../models/cliente');
 const { isValidPlate, normalizePlate, isValidCPF } = require('../utils/validators');
 const { generateToken, verifyToken } = require('../middleware/auth');
 const { sendWhatsAppVerificationCode, verifyWhatsAppCode } = require('../utils/twilioService');
@@ -291,6 +292,10 @@ router.get('/verify', async (req, res) => {
         }
     } else if (decoded.type === 'abastecedor') {
         user.name = decoded.name;
+        user.cpf = decoded.cpf;
+    } else if (decoded.type === 'cliente') {
+        user.name = decoded.name;
+        user.empresa = decoded.empresa;
         user.cpf = decoded.cpf;
     }
 
@@ -586,6 +591,186 @@ router.post('/driver/reset-password-cpf', async (req, res) => {
     } catch (error) {
         console.error('Reset password CPF error:', error);
         res.status(500).json({ error: 'Erro ao solicitar redefinição de senha' });
+    }
+});
+
+// ========================================
+// Cliente Authentication Endpoints
+// ========================================
+
+/**
+ * POST /api/auth/cliente/login
+ * Cliente login with CPF and password
+ * Returns JWT token
+ */
+router.post('/cliente/login', async (req, res) => {
+    try {
+        const { cpf, password } = req.body;
+
+        // Validate input
+        if (!cpf || !password) {
+            return res.status(400).json({ error: 'CPF e senha são obrigatórios' });
+        }
+
+        // Clean CPF (remove formatting)
+        const cleanCpf = cpf.replace(/\D/g, '');
+        if (cleanCpf.length !== 11) {
+            return res.status(400).json({ error: 'CPF inválido. Deve ter 11 dígitos.' });
+        }
+
+        // Verify password
+        const cliente = await Cliente.verifyPassword(cleanCpf, password);
+
+        if (!cliente) {
+            return res.status(401).json({ error: 'CPF ou senha inválidos' });
+        }
+
+        if (!cliente.active) {
+            return res.status(401).json({ error: 'Conta de cliente inativa' });
+        }
+
+        // Generate JWT token
+        const token = generateToken({
+            id: cliente.id,
+            name: cliente.name,
+            empresa: cliente.empresa,
+            cpf: cliente.cpf
+        }, 'cliente');
+
+        res.json({
+            message: 'Login successful',
+            token,
+            cliente: {
+                id: cliente.id,
+                name: cliente.name,
+                empresa: cliente.empresa
+            }
+        });
+    } catch (error) {
+        console.error('Cliente login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * POST /api/auth/cliente/forgot-password
+ * Request password reset - sends SMS code to cliente's phone
+ */
+router.post('/cliente/forgot-password', async (req, res) => {
+    try {
+        const { cpf } = req.body;
+
+        if (!cpf) {
+            return res.status(400).json({ error: 'CPF é obrigatório' });
+        }
+
+        // Clean CPF
+        const cleanCpf = cpf.replace(/\D/g, '');
+        if (cleanCpf.length !== 11) {
+            return res.status(400).json({ error: 'CPF inválido' });
+        }
+
+        // Find cliente by CPF
+        const cliente = await Cliente.findByCpf(cleanCpf);
+        if (!cliente) {
+            return res.status(404).json({ error: 'CPF não cadastrado' });
+        }
+
+        if (!cliente.phone) {
+            return res.status(400).json({ error: 'Cliente não possui telefone cadastrado' });
+        }
+
+        // Send verification code via WhatsApp or SMS
+        const result = await sendWhatsAppVerificationCode(cliente.phone);
+
+        // Mask phone number for response (show only last 4 digits)
+        const maskedPhone = '***' + cliente.phone.slice(-4);
+        const channelMessage = result.channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
+
+        res.json({
+            success: true,
+            message: `Código enviado por ${channelMessage}`,
+            phone: maskedPhone
+        });
+    } catch (error) {
+        console.error('Cliente forgot password error:', error);
+        res.status(500).json({ error: 'Erro ao enviar código. Tente novamente.' });
+    }
+});
+
+/**
+ * POST /api/auth/cliente/verify-reset-code
+ * Verify the SMS code
+ */
+router.post('/cliente/verify-reset-code', async (req, res) => {
+    try {
+        const { cpf, code } = req.body;
+
+        if (!cpf || !code) {
+            return res.status(400).json({ error: 'CPF e código são obrigatórios' });
+        }
+
+        // Clean CPF
+        const cleanCpf = cpf.replace(/\D/g, '');
+
+        // Find cliente
+        const cliente = await Cliente.findByCpf(cleanCpf);
+        if (!cliente) {
+            return res.status(404).json({ error: 'CPF não encontrado' });
+        }
+
+        // Verify code with WhatsApp
+        const result = await verifyWhatsAppCode(cliente.phone, code);
+
+        if (!result.valid) {
+            return res.status(400).json({ error: 'Código inválido ou expirado' });
+        }
+
+        res.json({
+            valid: true,
+            message: 'Código verificado com sucesso'
+        });
+    } catch (error) {
+        console.error('Cliente verify reset code error:', error);
+        res.status(500).json({ error: 'Erro ao verificar código' });
+    }
+});
+
+/**
+ * POST /api/auth/cliente/reset-password
+ * Reset password after code verification
+ */
+router.post('/cliente/reset-password', async (req, res) => {
+    try {
+        const { cpf, newPassword } = req.body;
+
+        if (!cpf || !newPassword) {
+            return res.status(400).json({ error: 'CPF e nova senha são obrigatórios' });
+        }
+
+        if (newPassword.length < 4) {
+            return res.status(400).json({ error: 'Senha deve ter pelo menos 4 caracteres' });
+        }
+
+        // Clean CPF
+        const cleanCpf = cpf.replace(/\D/g, '');
+
+        // Find cliente
+        const cliente = await Cliente.findByCpf(cleanCpf);
+        if (!cliente) {
+            return res.status(404).json({ error: 'CPF não encontrado' });
+        }
+
+        // Update password (code was already verified in previous step)
+        await Cliente.updatePassword(cliente.id, newPassword);
+
+        res.json({
+            success: true,
+            message: 'Senha alterada com sucesso'
+        });
+    } catch (error) {
+        console.error('Cliente reset password error:', error);
+        res.status(500).json({ error: 'Erro ao alterar senha' });
     }
 });
 

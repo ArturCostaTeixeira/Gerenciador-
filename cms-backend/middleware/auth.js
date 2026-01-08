@@ -115,12 +115,31 @@ function requireAuth(req, res, next) {
     next();
 }
 
+/**
+ * Requires cliente authentication
+ */
+function requireCliente(req, res, next) {
+    const token = extractToken(req);
+    if (!token) {
+        return res.status(401).json({ error: 'Authorization token required' });
+    }
+
+    const decoded = verifyToken(token);
+    if (!decoded || decoded.type !== 'cliente') {
+        return res.status(401).json({ error: 'Cliente authentication required' });
+    }
+
+    req.cliente = decoded;
+    next();
+}
+
 module.exports = {
     generateToken,
     verifyToken,
     requireAdmin,
     requireDriver,
     requireAbastecedor,
+    requireCliente,
     requireAuth,
     JWT_SECRET
 };

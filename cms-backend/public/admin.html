@@ -81,11 +81,7 @@
                     </button>
                     <button class="nav-item" data-page="extratos">
                         <span class="nav-icon">📊</span>
-                        <span class="nav-text">Extratos (Motorista)</span>
-                    </button>
-                    <button class="nav-item" data-page="extratosCaminhoes">
-                        <span class="nav-icon">🚛</span>
-                        <span class="nav-text">Extratos (Caminhões)</span>
+                        <span class="nav-text">Extratos</span>
                     </button>
                 </nav>
                 <div class="sidebar-footer">
@@ -480,7 +476,6 @@
                 <section id="clientsPage" class="content-page hidden">
                     <div class="page-header">
                         <h1>🏢 Clientes</h1>
-                        <button class="btn btn-primary" id="addClientBtn">+ Novo Cliente</button>
                     </div>
                     <div id="clientsListView">
                         <div class="card glass">
@@ -588,10 +583,37 @@
                     </div>
                 </section>
 
-                <!-- Extratos (Motorista) Page -->
+                <!-- Extratos Hub Page -->
                 <section id="extratosPage" class="content-page hidden">
                     <div class="page-header">
-                        <h1>📊 Extratos (Motorista)</h1>
+                        <h1>📊 Extratos</h1>
+                    </div>
+
+                    <!-- Navigation Buttons -->
+                    <div class="extratos-nav-cards">
+                        <div class="extrato-nav-card glass" onclick="showExtratoSubPage('motorista')">
+                            <div class="extrato-nav-icon">👤</div>
+                            <h3>Extratos Motoristas</h3>
+                            <p>Visualize extratos financeiros por motorista</p>
+                        </div>
+                        <div class="extrato-nav-card glass" onclick="showExtratoSubPage('caminhoes')">
+                            <div class="extrato-nav-icon">🚛</div>
+                            <h3>Extratos Caminhões</h3>
+                            <p>Visualize extratos por placa de veículo</p>
+                        </div>
+                        <div class="extrato-nav-card glass" onclick="showExtratoSubPage('cliente')">
+                            <div class="extrato-nav-icon">🏢</div>
+                            <h3>Extratos Cliente</h3>
+                            <p>Visualize extratos por cliente/empresa</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Extratos Motorista Sub-Page -->
+                <section id="extratosMotoristaPage" class="content-page hidden">
+                    <div class="page-header">
+                        <button class="btn btn-outline" onclick="backToExtratosHub()">← Voltar</button>
+                        <h1>👤 Extratos Motoristas</h1>
                         <div style="display: flex; gap: 1rem; align-items: center;">
                             <select id="extratoDriverSelect" class="filter-input" style="max-width: 300px;">
                                 <option value="">Selecione um motorista</option>
@@ -720,7 +742,8 @@
                 <!-- Extratos (Caminhões) Page -->
                 <section id="extratosCaminhoesPage" class="content-page hidden">
                     <div class="page-header">
-                        <h1>🚛 Extratos (Caminhões)</h1>
+                        <button class="btn btn-outline" onclick="backToExtratosHub()">← Voltar</button>
+                        <h1>🚛 Extratos Caminhões</h1>
                         <div style="display: flex; gap: 1rem; align-items: center;">
                             <select id="extratoPlateSelect" class="filter-input" style="max-width: 300px;">
                                 <option value="">Selecione uma placa</option>
@@ -816,6 +839,98 @@
                                 </thead>
                                 <tbody id="plateExtratoInsumosBody"></tbody>
                             </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Extratos Cliente Sub-Page -->
+                <section id="extratosClientePage" class="content-page hidden">
+                    <div class="page-header">
+                        <button class="btn btn-outline" onclick="backToExtratosHub()">← Voltar</button>
+                        <h1>🏢 Extratos Cliente</h1>
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <select id="extratoClienteSelect" class="filter-input" style="max-width: 300px;">
+                                <option value="">Selecione um cliente</option>
+                            </select>
+                            <button class="btn btn-primary" id="exportExtratoClienteBtn" style="display: none;">📄
+                                Exportar PDF</button>
+                        </div>
+                    </div>
+
+                    <div id="extratoClientePlaceholder" class="card glass" style="text-align: center; padding: 3rem;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🏢</div>
+                        <p style="color: var(--text-muted);">Selecione um cliente para visualizar o extrato</p>
+                    </div>
+
+                    <div id="extratoClienteContent" style="display: none;">
+                        <!-- Summary Cards -->
+                        <div class="summary-cards" style="margin-bottom: 1.5rem;">
+                            <div class="card summary-card glass">
+                                <div class="card-icon">📦</div>
+                                <div class="card-content">
+                                    <span class="card-label">Total de Fretes</span>
+                                    <span class="card-value" id="extratoClienteTotalFreights">0</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass">
+                                <div class="card-icon">📏</div>
+                                <div class="card-content">
+                                    <span class="card-label">Total KM</span>
+                                    <span class="card-value" id="extratoClienteTotalKm">0</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass">
+                                <div class="card-icon">⚖️</div>
+                                <div class="card-content">
+                                    <span class="card-label">Total Tons</span>
+                                    <span class="card-value" id="extratoClienteTotalTons">0</span>
+                                </div>
+                            </div>
+                            <div class="card summary-card glass highlight">
+                                <div class="card-icon">💰</div>
+                                <div class="card-content">
+                                    <span class="card-label">Valor Total</span>
+                                    <span class="card-value" id="extratoClienteTotalValue">R$ 0,00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Date Filter -->
+                        <div class="card glass" style="margin-bottom: 1.5rem; padding: 1rem;">
+                            <h3 style="margin-bottom: 1rem;">Filtrar por Período</h3>
+                            <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+                                <div class="input-group" style="margin-bottom: 0;">
+                                    <label for="extratoClienteDateFrom">De</label>
+                                    <input type="date" id="extratoClienteDateFrom" class="filter-input">
+                                </div>
+                                <div class="input-group" style="margin-bottom: 0;">
+                                    <label for="extratoClienteDateTo">Até</label>
+                                    <input type="date" id="extratoClienteDateTo" class="filter-input">
+                                </div>
+                                <button class="btn btn-primary" id="extratoClienteFilterBtn">Filtrar</button>
+                                <button class="btn btn-outline" id="extratoClienteClearFilterBtn">Limpar</button>
+                            </div>
+                        </div>
+
+                        <!-- Freights Table -->
+                        <div class="card glass">
+                            <h3 style="margin-bottom: 1rem;">📦 Fretes Realizados</h3>
+                            <div class="table-container">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Placa</th>
+                                            <th>KM</th>
+                                            <th>Tons</th>
+                                            <th>Preço (Transp.)</th>
+                                            <th>Valor</th>
+                                            <th>Comp. Descarga</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="extratoClienteFreightsBody"></tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </section>

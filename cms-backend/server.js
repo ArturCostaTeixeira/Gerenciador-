@@ -23,7 +23,7 @@ const { adminRouter: adminAbastecimentoRoutes, driverRouter: driverAbastecimento
 const { adminRouter: adminOutrosInsumoRoutes, driverRouter: driverOutrosInsumoRoutes } = require('./routes/outrosinsumos');
 const paymentRoutes = require('./routes/payments');
 const abastecedorRoutes = require('./routes/abastecedores');
-const { requireDriver, requireAdmin, requireAbastecedor } = require('./middleware/auth');
+const { requireDriver, requireAdmin, requireAbastecedor, requireCliente } = require('./middleware/auth');
 const Driver = require('./models/driver');
 const Freight = require('./models/freight');
 const Abastecimento = require('./models/abastecimento');
@@ -32,6 +32,7 @@ const ComprovanteDescarga = require('./models/comprovanteDescarga');
 const ComprovanteAbastecimento = require('./models/comprovanteAbastecimento');
 const ComprovanteCarga = require('./models/comprovanteCarga');
 const Payment = require('./models/payment');
+const Cliente = require('./models/cliente');
 const { query, queryOne } = require('./config/database');
 
 const app = express();
@@ -722,6 +723,255 @@ app.get('/api/abastecedor/drivers-by-plate/:plate', requireAbastecedor, async (r
 
 
 // ============================================
+// Cliente Routes
+// ============================================
+
+// Cliente profile route
+app.get('/api/cliente/profile', requireCliente, async (req, res) => {
+    try {
+        const cliente = await Cliente.findById(req.cliente.id);
+        if (!cliente) {
+            return res.status(404).json({ error: 'Cliente not found' });
+        }
+        // Don't expose password
+        const { password, ...safeCliente } = cliente;
+        res.json(safeCliente);
+    } catch (error) {
+        console.error('Get cliente profile error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Cliente: Get freights for this cliente (matched by empresa/company name)
+app.get('/api/cliente/freights', requireCliente, async (req, res) => {
+    try {
+        const cliente = await Cliente.findById(req.cliente.id);
+        if (!cliente) {
+            return res.status(404).json({ error: 'Cliente not found' });
+        }
+
+        const { date_from, date_to } = req.query;
+        const filters = {};
+        if (date_from) filters.date_from = date_from;
+        if (date_to) filters.date_to = date_to;
+
+        // Match freights by empresa (company) name
+        const freights = await Cliente.getFreights(cliente.empresa, filters);
+        res.json({ freights });
+    } catch (error) {
+        console.error('Get cliente freights error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Cliente: Get stats (matched by empresa/company name)
+app.get('/api/cliente/stats', requireCliente, async (req, res) => {
+    try {
+        const cliente = await Cliente.findById(req.cliente.id);
+        if (!cliente) {
+            return res.status(404).json({ error: 'Cliente not found' });
+        }
+
+        // Get date filters from query parameters
+        const { date_from, date_to } = req.query;
+        const filters = {};
+        if (date_from) filters.date_from = date_from;
+        if (date_to) filters.date_to = date_to;
+
+        // Match freights by empresa (company) name, with optional date filters
+        const stats = await Cliente.getStats(cliente.empresa, filters);
+        res.json({
+            total_freights: stats?.total_freights || 0,
+            total_km: stats?.total_km || 0,
+            total_tons: stats?.total_tons || 0,
+            total_value: stats?.total_value || 0
+        });
+    } catch (error) {
+        console.error('Get cliente stats error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ============================================
+// Admin Cliente Management Routes
+// ============================================
+
+// Admin: Get all clientes
+app.get('/api/admin/clientes', requireAdmin, async (req, res) => {
+    try {
+        const clientes = await Cliente.findAll();
+        res.json(clientes);
+    } catch (error) {
+        console.error('Get clientes error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Admin: Create a new cliente
+app.post('/api/admin/clientes', requireAdmin, async (req, res) => {
+    try {
+        const { empresa, name, cpf, cnpj, password, phone } = req.body;
+
+        if (!empresa) {
+            return res.status(400).json({ error: 'Empresa é obrigatório' });
+        }
+        if (!name) {
+            return res.status(400).json({ error: 'Nome é obrigatório' });
+        }
+        if (!cpf) {
+            return res.status(400).json({ error: 'CPF é obrigatório' });
+        }
+
+        // Clean CPF
+        const cleanCpf = cpf.replace(/\D/g, '');
+        if (cleanCpf.length !== 11) {
+            return res.status(400).json({ error: 'CPF inválido. Deve ter 11 dígitos.' });
+        }
+
+        // Check if cliente with same CPF already exists
+        const existingCpf = await Cliente.findByCpf(cleanCpf);
+        if (existingCpf) {
+            return res.status(409).json({ error: 'CPF já cadastrado' });
+        }
+
+        // Clean CNPJ if provided
+        const cleanCnpj = cnpj ? cnpj.replace(/\D/g, '') : null;
+
+        const trimmedEmpresa = empresa.trim();
+
+        // Check if empresa exists in clients table, if not, add it
+        const existingClient = await queryOne('SELECT id FROM clients WHERE name = ?', [trimmedEmpresa]);
+        if (!existingClient) {
+            await execute('INSERT INTO clients (name) VALUES (?)', [trimmedEmpresa]);
+        }
+
+        const cliente = await Cliente.create({
+            empresa: trimmedEmpresa,
+            name: name.trim(),
+            cpf: cleanCpf,
+            cnpj: cleanCnpj,
+            password: password || null,
+            phone: phone ? phone.replace(/\D/g, '') : null
+        });
+
+        res.status(201).json(cliente);
+    } catch (error) {
+        console.error('Create cliente error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Admin: Update a cliente
+app.put('/api/admin/clientes/:id', requireAdmin, async (req, res) => {
+    try {
+        const clienteId = parseInt(req.params.id);
+        const { empresa, name, cpf, cnpj, phone, active } = req.body;
+
+        // If empresa is being updated, check if it exists in clients table
+        if (empresa) {
+            const trimmedEmpresa = empresa.trim();
+            const existingClient = await queryOne('SELECT id FROM clients WHERE name = ?', [trimmedEmpresa]);
+            if (!existingClient) {
+                await execute('INSERT INTO clients (name) VALUES (?)', [trimmedEmpresa]);
+            }
+        }
+
+        const cliente = await Cliente.update(clienteId, {
+            empresa: empresa ? empresa.trim() : undefined,
+            name,
+            cpf: cpf ? cpf.replace(/\D/g, '') : undefined,
+            cnpj: cnpj !== undefined ? (cnpj ? cnpj.replace(/\D/g, '') : null) : undefined,
+            phone: phone ? phone.replace(/\D/g, '') : undefined,
+            active
+        });
+
+        if (!cliente) {
+            return res.status(404).json({ error: 'Cliente não encontrado' });
+        }
+
+        res.json(cliente);
+    } catch (error) {
+        console.error('Update cliente error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Admin: Reset cliente password (to any value)
+app.patch('/api/admin/clientes/:id/reset-password', requireAdmin, async (req, res) => {
+    try {
+        const clienteId = parseInt(req.params.id);
+        const { newPassword } = req.body;
+
+        if (!newPassword || newPassword.length < 4) {
+            return res.status(400).json({ error: 'Nova senha deve ter pelo menos 4 caracteres' });
+        }
+
+        const cliente = await Cliente.findById(clienteId);
+        if (!cliente) {
+            return res.status(404).json({ error: 'Cliente não encontrado' });
+        }
+
+        await Cliente.updatePassword(clienteId, newPassword);
+
+        res.json({
+            success: true,
+            message: 'Senha do cliente redefinida com sucesso'
+        });
+    } catch (error) {
+        console.error('Reset cliente password error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Admin: Delete (deactivate) a cliente
+app.delete('/api/admin/clientes/:id', requireAdmin, async (req, res) => {
+    try {
+        const clienteId = parseInt(req.params.id);
+
+        const cliente = await Cliente.findById(clienteId);
+        if (!cliente) {
+            return res.status(404).json({ error: 'Cliente não encontrado' });
+        }
+
+        await Cliente.update(clienteId, { active: false });
+        res.json({ message: 'Cliente desativado com sucesso' });
+    } catch (error) {
+        console.error('Delete cliente error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Admin: Reset abastecedor password (to first 4 digits of CPF)
+app.patch('/api/admin/abastecedores/:id/reset-password', requireAdmin, async (req, res) => {
+    try {
+        const abastecedorId = parseInt(req.params.id);
+        const Abastecedor = require('./models/abastecedor');
+
+        const abastecedor = await Abastecedor.findById(abastecedorId);
+        if (!abastecedor) {
+            return res.status(404).json({ error: 'Abastecedor não encontrado' });
+        }
+
+        // Get first 4 digits of CPF
+        const cpfDigits = abastecedor.cpf.replace(/\D/g, '');
+        if (cpfDigits.length < 4) {
+            return res.status(400).json({ error: 'CPF do abastecedor é inválido' });
+        }
+
+        const newPassword = cpfDigits.substring(0, 4);
+        await Abastecedor.updatePassword(abastecedorId, newPassword);
+
+        res.json({
+            success: true,
+            message: 'Senha do abastecedor redefinida com sucesso'
+        });
+    } catch (error) {
+        console.error('Reset abastecedor password error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ============================================
 // Admin Comprovantes Descarga Pool Endpoints
 // ============================================
 
@@ -1050,6 +1300,11 @@ app.get('/abastecedor', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'abastecedor.html'));
 });
 
+// Cliente portal route
+app.get('/cliente', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'cliente.html'));
+});
+
 // SPA fallback - serve appropriate page based on path
 app.get('*', (req, res) => {
     if (req.path.startsWith('/api')) {
@@ -1058,6 +1313,8 @@ app.get('*', (req, res) => {
         res.sendFile(path.join(__dirname, 'public', 'admin.html'));
     } else if (req.path.startsWith('/abastecedor')) {
         res.sendFile(path.join(__dirname, 'public', 'abastecedor.html'));
+    } else if (req.path.startsWith('/cliente')) {
+        res.sendFile(path.join(__dirname, 'public', 'cliente.html'));
     } else if (req.path === '/' || req.path === '') {
         // Root serves landing page
         res.sendFile(path.join(__dirname, 'public', 'landing.html'));

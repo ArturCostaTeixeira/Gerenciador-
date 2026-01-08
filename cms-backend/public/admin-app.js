@@ -8,6 +8,7 @@ const API_BASE = '/api';
 let token = localStorage.getItem('admin_token');
 let drivers = [];
 let abastecedores = []; // Fuel attendants
+let clienteUsers = []; // Cliente users (for login)
 let clients = [];
 let allFreights = [];
 let allAbastecimentos = [];
@@ -150,7 +151,7 @@ async function loadDashboard() {
         if (!verify.valid || verify.type !== 'admin') throw new Error('Invalid session');
 
         showPage(dashboardPage);
-        await Promise.all([loadDrivers(), loadAbastecedores()]);
+        await Promise.all([loadDrivers(), loadAbastecedores(), loadClienteUsers()]);
         await loadFreights();
         await loadAbastecimentos();
         await loadOutrosInsumos();
@@ -280,13 +281,24 @@ async function loadAbastecedores() {
     }
 }
 
+// Load cliente users
+async function loadClienteUsers() {
+    try {
+        clienteUsers = await apiRequest('/admin/clientes');
+        renderDriversTable();
+    } catch (error) {
+        console.error('Load clientes error:', error);
+    }
+}
+
 function renderDriversTable(filter = '') {
     const tbody = document.getElementById('driversTableBody');
 
-    // Combine drivers and abastecedores into a unified list
+    // Combine drivers, abastecedores, and clientes into a unified list
     const driversWithType = drivers.map(d => ({ ...d, userType: 'motorista' }));
     const abastecedoresWithType = abastecedores.map(a => ({ ...a, userType: 'abastecedor' }));
-    const allUsers = [...driversWithType, ...abastecedoresWithType];
+    const clientesWithType = clienteUsers.map(c => ({ ...c, userType: 'cliente' }));
+    const allUsers = [...driversWithType, ...abastecedoresWithType, ...clientesWithType];
 
     const filtered = filter
         ? allUsers.filter(u => u.name?.toLowerCase().includes(filter.toLowerCase()))
@@ -298,6 +310,14 @@ function renderDriversTable(filter = '') {
         const clean = cpf.replace(/\D/g, '');
         if (clean.length !== 11) return cpf;
         return clean.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    };
+
+    // Helper function to format CNPJ
+    const formatCNPJ = (cnpj) => {
+        if (!cnpj) return '-';
+        const clean = cnpj.replace(/\D/g, '');
+        if (clean.length !== 14) return cnpj;
+        return clean.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
     };
 
     // Helper function to format phone
@@ -316,11 +336,27 @@ function renderDriversTable(filter = '') {
         ? '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">Nenhum usuário encontrado</td></tr>'
         : filtered.map(u => {
             const isMotorista = u.userType === 'motorista';
+            const isAbastecedor = u.userType === 'abastecedor';
+            const isCliente = u.userType === 'cliente';
 
-            // Type badge
-            const typeBadge = isMotorista
-                ? '<span class="status-badge" style="background:rgba(99,102,241,0.2);color:#6366f1;">Motorista</span>'
-                : '<span class="status-badge" style="background:rgba(245,158,11,0.2);color:#f59e0b;">Abastecedor</span>';
+            // Type badge with different colors
+            let typeBadge;
+            if (isMotorista) {
+                typeBadge = '<span class="status-badge" style="background:rgba(99,102,241,0.2);color:#6366f1;">Motorista</span>';
+            } else if (isAbastecedor) {
+                typeBadge = '<span class="status-badge" style="background:rgba(245,158,11,0.2);color:#f59e0b;">Abastecedor</span>';
+            } else {
+                typeBadge = '<span class="status-badge" style="background:rgba(16,185,129,0.2);color:#10b981;">Cliente</span>';
+            }
+
+            // Name cell - for cliente, show empresa + name
+            let nameCell = u.name;
+            if (isCliente && u.empresa) {
+                nameCell = `<strong>${u.empresa}</strong><br><small style="color:var(--text-muted)">${u.name}</small>`;
+            }
+
+            // CPF cell (all user types now use CPF)
+            let cpfCell = formatCPF(u.cpf);
 
             // Authentication cell - only for drivers
             let authCell = '-';
@@ -333,17 +369,19 @@ function renderDriversTable(filter = '') {
                 }
             }
 
-            // Reset Password cell - only for drivers
+            // Reset Password cell
             let resetPasswordCell = '-';
             if (isMotorista) {
                 const hasResetRequest = u.password_reset_requested === 1 || u.password_reset_requested === true;
                 if (hasResetRequest) {
-                    // Show red/warning button when reset is requested
                     resetPasswordCell = `<button class="btn btn-sm btn-danger btn-pulse" onclick="resetDriverPassword(${u.id})" title="Clique para redefinir a senha">🔔 Resetar</button>`;
                 } else {
-                    // Normal outline button
                     resetPasswordCell = `<button class="btn btn-sm btn-outline" onclick="resetDriverPassword(${u.id})" title="Redefinir senha para os 4 primeiros dígitos do CPF">🔑 Resetar</button>`;
                 }
+            } else if (isAbastecedor) {
+                resetPasswordCell = `<button class="btn btn-sm btn-outline" onclick="resetAbastecedorPassword(${u.id})" title="Redefinir senha para os 4 primeiros dígitos do CPF">🔑 Resetar</button>`;
+            } else if (isCliente) {
+                resetPasswordCell = `<button class="btn btn-sm btn-outline" onclick="showResetClientePasswordModal(${u.id})" title="Definir nova senha">🔑 Resetar</button>`;
             }
 
             // Format plates - show all plates for drivers with multiple plates
@@ -352,30 +390,35 @@ function renderDriversTable(filter = '') {
                 try {
                     const platesArray = typeof u.plates === 'string' ? JSON.parse(u.plates) : u.plates;
                     if (Array.isArray(platesArray) && platesArray.length > 0) {
-                        // Deduplicate: use the plates array (which should include primary)
                         const uniquePlates = [...new Set(platesArray)];
                         platesDisplay = uniquePlates.map(p => `<span class="plate-badge">${p}</span>`).join('');
                     }
                 } catch (e) {
-                    // If parsing fails, just show the primary plate
                     if (u.plate) {
                         platesDisplay = `<span class="plate-badge">${u.plate}</span>`;
                     }
                 }
             } else if (isMotorista && u.plate) {
                 platesDisplay = `<span class="plate-badge">${u.plate}</span>`;
+            } else if (!isMotorista) {
+                platesDisplay = '-';
             }
 
-            // Actions based on user type - only Edit button now
-            const actions = isMotorista
-                ? `<button class="btn btn-sm btn-outline" onclick="editDriver(${u.id})">Editar</button>`
-                : `<button class="btn btn-sm btn-outline" onclick="editAbastecedor(${u.id})">Editar</button>`;
+            // Actions based on user type
+            let actions;
+            if (isMotorista) {
+                actions = `<button class="btn btn-sm btn-outline" onclick="editDriver(${u.id})">Editar</button>`;
+            } else if (isAbastecedor) {
+                actions = `<button class="btn btn-sm btn-outline" onclick="editAbastecedor(${u.id})">Editar</button>`;
+            } else {
+                actions = `<button class="btn btn-sm btn-outline" onclick="editCliente(${u.id})">Editar</button>`;
+            }
 
             return `
             <tr>
                 <td>${typeBadge}</td>
-                <td>${u.name}</td>
-                <td style="white-space:nowrap;">${formatCPF(u.cpf)}</td>
+                <td>${nameCell}</td>
+                <td style="white-space:nowrap;">${cpfCell}</td>
                 <td style="white-space:nowrap;">${formatPhone(u.phone)}</td>
                 <td class="plates-cell" style="white-space:nowrap;">${platesDisplay}</td>
                 <td><span class="${u.active ? 'status-active' : 'status-inactive'}">${u.active ? 'Ativo' : 'Inativo'}</span></td>
@@ -420,6 +463,205 @@ window.resetDriverPassword = async function (id) {
     } catch (error) {
         console.error('Reset password error:', error);
         alert('Erro ao redefinir senha: ' + error.message);
+    }
+};
+
+// Reset abastecedor password to first 4 digits of CPF
+window.resetAbastecedorPassword = async function (id) {
+    const abastecedor = abastecedores.find(a => a.id === id);
+    if (!abastecedor) return;
+
+    if (!confirm(`Deseja redefinir a senha de "${abastecedor.name}" para os 4 primeiros dígitos do CPF?`)) return;
+
+    try {
+        await apiRequest(`/admin/abastecedores/${id}/reset-password`, {
+            method: 'PATCH'
+        });
+        alert(`Senha de "${abastecedor.name}" redefinida com sucesso!`);
+        await loadAbastecedores();
+    } catch (error) {
+        console.error('Reset abastecedor password error:', error);
+        alert('Erro ao redefinir senha: ' + error.message);
+    }
+};
+
+// Show modal to reset cliente password (admin can set any password)
+window.showResetClientePasswordModal = function (id) {
+    const cliente = clienteUsers.find(c => c.id === id);
+    if (!cliente) return;
+
+    showModal('Redefinir Senha do Cliente', `
+        <input type="hidden" id="resetClienteId" value="${id}">
+        <p style="margin-bottom:1rem;color:var(--text-secondary);">
+            Definindo nova senha para <strong>${cliente.name}</strong>
+        </p>
+        <div class="input-group">
+            <label>Nova Senha</label>
+            <input type="text" id="newClientePassword" placeholder="Mínimo 4 caracteres" minlength="4" required>
+            <span class="input-hint">A senha pode ser qualquer valor de sua escolha</span>
+        </div>
+    `, async () => {
+        const newPassword = document.getElementById('newClientePassword').value;
+
+        if (!newPassword || newPassword.length < 4) {
+            alert('A senha deve ter pelo menos 4 caracteres');
+            return;
+        }
+
+        try {
+            await apiRequest(`/admin/clientes/${id}/reset-password`, {
+                method: 'PATCH',
+                body: JSON.stringify({ newPassword })
+            });
+            alert(`Senha de "${cliente.name}" redefinida com sucesso!`);
+            await loadClienteUsers();
+        } catch (error) {
+            console.error('Reset cliente password error:', error);
+            alert('Erro ao redefinir senha: ' + error.message);
+        }
+    });
+};
+
+// Edit cliente
+window.editCliente = async function (id) {
+    const cliente = clienteUsers.find(c => c.id === id);
+    if (!cliente) return;
+
+    const formattedCpf = cliente.cpf ? formatCpfInput(cliente.cpf) : '';
+    const formattedCnpj = cliente.cnpj ? formatCnpjInput(cliente.cnpj) : '';
+    const formattedPhone = cliente.phone ? formatPhoneInput(cliente.phone) : '';
+
+    // Build company options from existing clients
+    const companyOptions = clients.map(c =>
+        `<option value="${c.client}" ${cliente.empresa === c.client ? 'selected' : ''}>${c.client}</option>`
+    ).join('');
+
+    showModal('Editar Cliente', `
+        <input type="hidden" id="editClienteId" value="${id}">
+        <div class="input-group">
+            <label>Empresa</label>
+            <div id="editEmpresaSelectContainer">
+                <select id="editClienteEmpresaSelect" style="margin-bottom: 8px;">
+                    <option value="">Selecione uma empresa</option>
+                    ${companyOptions}
+                </select>
+                <button type="button" class="btn btn-outline btn-sm" onclick="toggleEditEmpresaField()">+ Nova Empresa</button>
+            </div>
+            <div id="editNewEmpresaContainer" style="display:none; margin-top: 8px;">
+                <input type="text" id="editClienteEmpresaInput" placeholder="Nome da nova empresa">
+                <button type="button" class="btn btn-outline btn-sm" style="margin-top: 4px;" onclick="toggleEditEmpresaField()">← Selecionar existente</button>
+            </div>
+        </div>
+        <div class="input-group">
+            <label>Nome</label>
+            <input type="text" id="editClienteName" value="${cliente.name}" required>
+        </div>
+        <div class="input-group">
+            <label>CPF</label>
+            <input type="text" id="editClienteCpf" value="${formattedCpf}" placeholder="000.000.000-00">
+        </div>
+        <div class="input-group">
+            <label>CNPJ</label>
+            <input type="text" id="editClienteCnpj" value="${formattedCnpj}" placeholder="00.000.000/0000-00">
+        </div>
+        <div class="input-group">
+            <label>Telefone</label>
+            <input type="text" id="editClientePhone" value="${formattedPhone}" placeholder="(00) 00000-0000">
+        </div>
+        <div class="input-group">
+            <label>Ativo</label>
+            <select id="editClienteActive">
+                <option value="true" ${cliente.active ? 'selected' : ''}>Sim</option>
+                <option value="false" ${!cliente.active ? 'selected' : ''}>Não</option>
+            </select>
+        </div>
+    `, async () => {
+        try {
+            // Get empresa from either dropdown or new input
+            let empresa;
+            const editNewEmpresaContainer = document.getElementById('editNewEmpresaContainer');
+            if (editNewEmpresaContainer.style.display !== 'none') {
+                empresa = document.getElementById('editClienteEmpresaInput').value;
+            } else {
+                empresa = document.getElementById('editClienteEmpresaSelect').value;
+            }
+
+            if (!empresa) {
+                alert('Por favor, selecione ou crie uma empresa');
+                return false;
+            }
+
+            await apiRequest(`/admin/clientes/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    empresa: empresa,
+                    name: document.getElementById('editClienteName').value,
+                    cpf: document.getElementById('editClienteCpf').value.replace(/\D/g, '') || null,
+                    cnpj: document.getElementById('editClienteCnpj').value.replace(/\D/g, '') || null,
+                    phone: document.getElementById('editClientePhone').value.replace(/\D/g, '') || null,
+                    active: document.getElementById('editClienteActive').value === 'true'
+                })
+            });
+            await loadClienteUsers();
+            await loadClients();
+        } catch (error) {
+            console.error('Update cliente error:', error);
+            alert('Erro ao atualizar cliente: ' + error.message);
+        }
+    }, async () => {
+        // Delete callback
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${API_BASE}/admin/clientes/${id}`, {
+            method: 'DELETE',
+            headers
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Erro ao excluir cliente');
+        }
+
+        await loadClienteUsers();
+        await loadClients();
+    });
+
+    // Attach formatters after modal is rendered
+    setTimeout(() => {
+        const cpfInput = document.getElementById('editClienteCpf');
+        const cnpjInput = document.getElementById('editClienteCnpj');
+        const phoneInput = document.getElementById('editClientePhone');
+        if (cpfInput) {
+            cpfInput.addEventListener('input', (e) => {
+                e.target.value = formatCpfInput(e.target.value);
+            });
+        }
+        if (cnpjInput) {
+            cnpjInput.addEventListener('input', (e) => {
+                e.target.value = formatCnpjInput(e.target.value);
+            });
+        }
+        if (phoneInput) {
+            phoneInput.addEventListener('input', (e) => {
+                e.target.value = formatPhoneInput(e.target.value);
+            });
+        }
+    }, 50);
+};
+
+// Toggle between selecting existing empresa and creating new one (for edit modal)
+window.toggleEditEmpresaField = function () {
+    const selectContainer = document.getElementById('editEmpresaSelectContainer');
+    const newContainer = document.getElementById('editNewEmpresaContainer');
+
+    if (newContainer.style.display === 'none') {
+        selectContainer.style.display = 'none';
+        newContainer.style.display = 'block';
+        document.getElementById('editClienteEmpresaInput').focus();
+    } else {
+        selectContainer.style.display = 'block';
+        newContainer.style.display = 'none';
     }
 };
 
@@ -540,6 +782,23 @@ window.editDriver = async function (id) {
             console.error('Update driver error:', error);
             alert('Erro ao atualizar motorista: ' + error.message);
         }
+    }, async () => {
+        // Delete callback
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${API_BASE}/admin/drivers/${id}`, {
+            method: 'DELETE',
+            headers
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Erro ao excluir motorista');
+        }
+
+        await loadDrivers();
+        await loadClients();
     });
 
     // Attach input formatters after modal is rendered
@@ -605,21 +864,43 @@ function attachEditDriverFormatters() {
 }
 
 function showAddDriverModal() {
+    // Build company options from existing clients
+    const companyOptions = clients.map(c => `<option value="${c.client}">${c.client}</option>`).join('');
+
     showModal('Novo Usuário', `
         <div class="input-group">
             <label>Tipo de Usuário</label>
             <select id="newUserType" required onchange="toggleUserTypeFields()">
                 <option value="motorista">Motorista</option>
                 <option value="abastecedor">Abastecedor</option>
+                <option value="cliente">Cliente</option>
             </select>
+        </div>
+        <div class="input-group" id="empresaField" style="display:none;">
+            <label>Empresa</label>
+            <div id="empresaSelectContainer">
+                <select id="newClienteEmpresaSelect" style="margin-bottom: 8px;">
+                    <option value="">Selecione uma empresa</option>
+                    ${companyOptions}
+                </select>
+                <button type="button" class="btn btn-outline btn-sm" id="addNewEmpresaBtn" onclick="toggleNewEmpresaField()">+ Nova Empresa</button>
+            </div>
+            <div id="newEmpresaContainer" style="display:none; margin-top: 8px;">
+                <input type="text" id="newClienteEmpresaInput" placeholder="Nome da nova empresa">
+                <button type="button" class="btn btn-outline btn-sm" style="margin-top: 4px;" onclick="toggleNewEmpresaField()">← Selecionar existente</button>
+            </div>
         </div>
         <div class="input-group">
             <label>Nome</label>
             <input type="text" id="newDriverName" required>
         </div>
         <div class="input-group" id="cpfField">
-            <label>CPF</label>
+            <label id="cpfCnpjLabel">CPF</label>
             <input type="text" id="newDriverCpf" placeholder="000.000.000-00" required>
+        </div>
+        <div class="input-group" id="cnpjField" style="display:none;">
+            <label>CNPJ</label>
+            <input type="text" id="newClienteCnpj" placeholder="00.000.000/0000-00">
         </div>
         <div class="input-group" id="passwordField">
             <label>Senha</label>
@@ -661,24 +942,96 @@ function showAddDriverModal() {
                 })
             });
             await loadAbastecedores();
+        } else if (userType === 'cliente') {
+            // Get empresa from either dropdown or new input
+            let empresa;
+            const newEmpresaContainer = document.getElementById('newEmpresaContainer');
+            if (newEmpresaContainer.style.display !== 'none') {
+                empresa = document.getElementById('newClienteEmpresaInput').value;
+            } else {
+                empresa = document.getElementById('newClienteEmpresaSelect').value;
+            }
+
+            if (!empresa) {
+                alert('Por favor, selecione ou crie uma empresa');
+                return false;
+            }
+
+            await apiRequest('/admin/clientes', {
+                method: 'POST',
+                body: JSON.stringify({
+                    empresa: empresa,
+                    name: document.getElementById('newDriverName').value,
+                    cpf: document.getElementById('newDriverCpf').value,
+                    cnpj: document.getElementById('newClienteCnpj').value || null,
+                    password: document.getElementById('newDriverPassword').value,
+                    phone: document.getElementById('newDriverPhone').value || null
+                })
+            });
+            await loadClienteUsers();
+            await loadClients();
         }
     });
 
     // Attach input formatters after modal is rendered
-    setTimeout(attachInputFormatters, 50);
+    setTimeout(() => {
+        attachInputFormatters();
+        // Also attach CNPJ formatter
+        const cnpjInput = document.getElementById('newClienteCnpj');
+        if (cnpjInput) {
+            cnpjInput.addEventListener('input', (e) => {
+                e.target.value = formatCnpjInput(e.target.value);
+            });
+        }
+    }, 50);
 }
 
+// Toggle between selecting existing empresa and creating new one
+window.toggleNewEmpresaField = function () {
+    const selectContainer = document.getElementById('empresaSelectContainer');
+    const newContainer = document.getElementById('newEmpresaContainer');
+
+    if (newContainer.style.display === 'none') {
+        selectContainer.style.display = 'none';
+        newContainer.style.display = 'block';
+        document.getElementById('newClienteEmpresaInput').focus();
+    } else {
+        selectContainer.style.display = 'block';
+        newContainer.style.display = 'none';
+    }
+};
+
+// Format CNPJ as 00.000.000/0000-00
+function formatCnpjInput(value) {
+    const numbers = value.replace(/\D/g, '').substring(0, 14);
+    if (numbers.length <= 2) return numbers;
+    if (numbers.length <= 5) return `${numbers.slice(0, 2)}.${numbers.slice(2)}`;
+    if (numbers.length <= 8) return `${numbers.slice(0, 2)}.${numbers.slice(2, 5)}.${numbers.slice(5)}`;
+    if (numbers.length <= 12) return `${numbers.slice(0, 2)}.${numbers.slice(2, 5)}.${numbers.slice(5, 8)}/${numbers.slice(8)}`;
+    return `${numbers.slice(0, 2)}.${numbers.slice(2, 5)}.${numbers.slice(5, 8)}/${numbers.slice(8, 12)}-${numbers.slice(12)}`;
+}
 
 // Toggle fields based on user type selection
 window.toggleUserTypeFields = function () {
     const userType = document.getElementById('newUserType').value;
+    const empresaField = document.getElementById('empresaField');
+    const cnpjField = document.getElementById('cnpjField');
     const motoristaFields = document.getElementById('motoristaFields');
     const plateInput = document.getElementById('newDriverPlate');
 
     if (userType === 'motorista') {
+        empresaField.style.display = 'none';
+        cnpjField.style.display = 'none';
         motoristaFields.style.display = 'block';
         plateInput.required = true;
-    } else {
+    } else if (userType === 'abastecedor') {
+        empresaField.style.display = 'none';
+        cnpjField.style.display = 'none';
+        motoristaFields.style.display = 'none';
+        plateInput.required = false;
+    } else if (userType === 'cliente') {
+        empresaField.style.display = 'block';
+        cnpjField.style.display = 'block';
         motoristaFields.style.display = 'none';
         plateInput.required = false;
     }
@@ -807,6 +1160,22 @@ window.editAbastecedor = async function (id) {
                 active: document.getElementById('editAbastecedorActive').value === 'true'
             })
         });
+        await loadAbastecedores();
+    }, async () => {
+        // Delete callback
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${API_BASE}/admin/abastecedores/${id}`, {
+            method: 'DELETE',
+            headers
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Erro ao excluir abastecedor');
+        }
+
         await loadAbastecedores();
     });
 
@@ -2422,10 +2791,14 @@ function initModal() {
         e.preventDefault();
         if (modalCallback) {
             try {
-                await modalCallback();
-                hideModal();
+                const result = await modalCallback();
+                // If callback returns false, don't close the modal
+                if (result !== false) {
+                    hideModal();
+                }
             } catch (error) {
-                alert(error.message);
+                console.error('Modal callback error:', error);
+                alert(error.message || 'Erro ao salvar');
             }
         }
     });
@@ -3709,6 +4082,262 @@ async function exportPlateExtratoPDF() {
 }
 
 // ========================================
+// Extratos Hub Navigation
+// ========================================
+
+function showExtratoSubPage(type) {
+    const pages = document.querySelectorAll('.content-page');
+    pages.forEach(p => {
+        p.classList.remove('active');
+        p.classList.add('hidden');
+    });
+
+    if (type === 'motorista') {
+        const page = document.getElementById('extratosMotoristaPage');
+        page.classList.remove('hidden');
+        page.classList.add('active');
+        populateExtratoDriverSelect();
+    } else if (type === 'caminhoes') {
+        const page = document.getElementById('extratosCaminhoesPage');
+        page.classList.remove('hidden');
+        page.classList.add('active');
+        populateExtratoPlateSelect();
+    } else if (type === 'cliente') {
+        const page = document.getElementById('extratosClientePage');
+        page.classList.remove('hidden');
+        page.classList.add('active');
+        populateExtratoClienteSelect();
+    }
+}
+
+function backToExtratosHub() {
+    const pages = document.querySelectorAll('.content-page');
+    pages.forEach(p => {
+        p.classList.remove('active');
+        p.classList.add('hidden');
+    });
+
+    const hubPage = document.getElementById('extratosPage');
+    hubPage.classList.remove('hidden');
+    hubPage.classList.add('active');
+}
+
+// ========================================
+// Extratos Cliente Page
+// ========================================
+
+let selectedExtratoCliente = null;
+let cachedExtratoClienteData = null;
+
+function initExtratosClientePage() {
+    const select = document.getElementById('extratoClienteSelect');
+    if (select) {
+        select.addEventListener('change', (e) => {
+            const empresa = e.target.value;
+            if (empresa) {
+                loadClienteExtrato(empresa);
+            } else {
+                document.getElementById('extratoClientePlaceholder').style.display = 'block';
+                document.getElementById('extratoClienteContent').style.display = 'none';
+                document.getElementById('exportExtratoClienteBtn').style.display = 'none';
+            }
+        });
+    }
+
+    const filterBtn = document.getElementById('extratoClienteFilterBtn');
+    if (filterBtn) {
+        filterBtn.addEventListener('click', () => {
+            if (selectedExtratoCliente) {
+                loadClienteExtrato(selectedExtratoCliente);
+            }
+        });
+    }
+
+    const clearBtn = document.getElementById('extratoClienteClearFilterBtn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            document.getElementById('extratoClienteDateFrom').value = '';
+            document.getElementById('extratoClienteDateTo').value = '';
+            if (selectedExtratoCliente) {
+                loadClienteExtrato(selectedExtratoCliente);
+            }
+        });
+    }
+
+    const exportBtn = document.getElementById('exportExtratoClienteBtn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportClienteExtratoPDF);
+    }
+}
+
+async function populateExtratoClienteSelect() {
+    const select = document.getElementById('extratoClienteSelect');
+    if (!select) return;
+
+    try {
+        const data = await apiRequest('/admin/clients');
+        const empresas = [...new Set(data.clients.map(c => c.empresa).filter(Boolean))].sort();
+
+        select.innerHTML = '<option value="">Selecione um cliente</option>' +
+            empresas.map(empresa => `<option value="${empresa}">${empresa}</option>`).join('');
+    } catch (error) {
+        console.error('Error loading clients for extrato:', error);
+    }
+}
+
+async function loadClienteExtrato(empresa) {
+    selectedExtratoCliente = empresa;
+
+    const dateFrom = document.getElementById('extratoClienteDateFrom').value;
+    const dateTo = document.getElementById('extratoClienteDateTo').value;
+
+    let url = `/admin/clients/stats/${encodeURIComponent(empresa)}`;
+    const params = new URLSearchParams();
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    if (params.toString()) url += `?${params.toString()}`;
+
+    try {
+        const stats = await apiRequest(url);
+
+        // Update summary cards
+        document.getElementById('extratoClienteTotalFreights').textContent = stats.total_freights || 0;
+        document.getElementById('extratoClienteTotalKm').textContent = formatNumber(stats.total_km || 0);
+        document.getElementById('extratoClienteTotalTons').textContent = formatNumber(stats.total_tons || 0, 2);
+        document.getElementById('extratoClienteTotalValue').textContent = formatCurrency(stats.total_value || 0);
+
+        // Load freights
+        let freightsUrl = `/admin/clients/freights/${encodeURIComponent(empresa)}`;
+        if (params.toString()) freightsUrl += `?${params.toString()}`;
+        const freightsData = await apiRequest(freightsUrl);
+        const freights = freightsData.freights || [];
+
+        // Cache for PDF export
+        cachedExtratoClienteData = { empresa, stats, freights, dateFrom, dateTo };
+
+        // Render freights table
+        const tbody = document.getElementById('extratoClienteFreightsBody');
+        if (freights.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">Nenhum frete encontrado</td></tr>';
+        } else {
+            tbody.innerHTML = freights.map(f => {
+                const comprovanteDescarga = f.comprovante_descarga
+                    ? `<a href="${f.comprovante_descarga}" target="_blank" class="btn btn-sm btn-outline">Ver</a>`
+                    : '-';
+
+                return `
+                    <tr>
+                        <td>${formatDate(f.date)}</td>
+                        <td><span class="plate-badge">${f.plate || f.driver_plate || '-'}</span></td>
+                        <td>${formatNumber(f.km)}</td>
+                        <td>${formatNumber(f.tons, 2)}</td>
+                        <td>R$ ${formatPricePerKmTon(f.price_per_km_ton_transportadora)}</td>
+                        <td class="value-positive">${formatCurrency(f.total_value_transportadora)}</td>
+                        <td>${comprovanteDescarga}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Show content
+        document.getElementById('extratoClientePlaceholder').style.display = 'none';
+        document.getElementById('extratoClienteContent').style.display = 'block';
+        document.getElementById('exportExtratoClienteBtn').style.display = 'inline-flex';
+    } catch (error) {
+        console.error('Error loading cliente extrato:', error);
+        document.getElementById('extratoClienteFreightsBody').innerHTML =
+            '<tr><td colspan="7" style="text-align:center;color:var(--error)">Erro ao carregar dados</td></tr>';
+    }
+}
+
+function exportClienteExtratoPDF() {
+    if (!cachedExtratoClienteData) return;
+
+    const { empresa, stats, freights, dateFrom, dateTo } = cachedExtratoClienteData;
+
+    let dateRangeText = '';
+    if (dateFrom || dateTo) {
+        const fromStr = dateFrom ? new Date(dateFrom + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+        const toStr = dateTo ? new Date(dateTo + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+        dateRangeText = `<p><strong>Período:</strong> ${fromStr} até ${toStr}</p>`;
+    }
+
+    const printContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Extrato - ${empresa}</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 2rem; }
+                h1, h2, h3 { margin-bottom: 1rem; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
+                th, td { border: 1px solid #000; padding: 0.5rem; text-align: left; }
+                th { background: #f0f0f0; }
+                .summary { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+                .summary-item { padding: 1rem; border: 1px solid #000; }
+                .summary-item strong { display: block; font-size: 1.2rem; }
+            </style>
+        </head>
+        <body>
+            <h1>Extrato - ${empresa}</h1>
+            <p><strong>Data:</strong> ${new Date().toLocaleDateString('pt-BR')}</p>
+            ${dateRangeText}
+
+            <div class="summary">
+                <div class="summary-item">
+                    <span>Total de Fretes</span>
+                    <strong>${stats.total_freights || 0}</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Total KM</span>
+                    <strong>${formatNumber(stats.total_km || 0)}</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Total Tons</span>
+                    <strong>${formatNumber(stats.total_tons || 0, 2)}</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Valor Total</span>
+                    <strong>${formatCurrency(stats.total_value || 0)}</strong>
+                </div>
+            </div>
+
+            <h2>Fretes Realizados</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Placa</th>
+                        <th>KM</th>
+                        <th>Tons</th>
+                        <th>Preço</th>
+                        <th>Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${freights.map(f => `
+                        <tr>
+                            <td>${formatDate(f.date)}</td>
+                            <td>${f.plate || f.driver_plate || '-'}</td>
+                            <td>${formatNumber(f.km)}</td>
+                            <td>${formatNumber(f.tons, 2)}</td>
+                            <td>R$ ${formatPricePerKmTon(f.price_per_km_ton_transportadora)}</td>
+                            <td>${formatCurrency(f.total_value_transportadora)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.print();
+}
+
+// ========================================
 // Initialize
 // ========================================
 
@@ -3720,11 +4349,15 @@ function init() {
     document.getElementById('addFreightBtn').addEventListener('click', showAddFreightModal);
     document.getElementById('addAbastecimentoBtn').addEventListener('click', showAddAbastecimentoModal);
     document.getElementById('addOutrosInsumoBtn').addEventListener('click', showAddOutrosInsumoModal);
-    document.getElementById('addClientBtn').addEventListener('click', showAddClientModal);
-    document.getElementById('backToClients').addEventListener('click', () => {
-        document.getElementById('clientDetailView').classList.add('hidden');
-        document.getElementById('clientsListView').classList.remove('hidden');
-    });
+
+    // Back to clients list button
+    const backToClientsBtn = document.getElementById('backToClients');
+    if (backToClientsBtn) {
+        backToClientsBtn.addEventListener('click', () => {
+            document.getElementById('clientDetailView').classList.add('hidden');
+            document.getElementById('clientsListView').classList.remove('hidden');
+        });
+    }
 
     initNavigation();
     initModal();
@@ -3735,6 +4368,7 @@ function init() {
     initFinanceiroPage();
     initExtratosPage();
     initExtratosCaminhoesPage();
+    initExtratosClientePage();
 
     if (token) loadDashboard();
     else showPage(loginPage);

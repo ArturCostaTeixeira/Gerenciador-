@@ -217,6 +217,43 @@ async function initDatabase() {
         )
     `);
 
+    await exec(`
+        CREATE TABLE IF NOT EXISTS clientes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa TEXT NOT NULL,
+            name TEXT NOT NULL,
+            cpf TEXT NOT NULL UNIQUE,
+            password TEXT,
+            phone TEXT,
+            active INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    // Add empresa column to clientes if it doesn't exist (migration)
+    try {
+        await exec(`ALTER TABLE clientes ADD COLUMN empresa TEXT`);
+        console.log('Added empresa column to clientes');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    // Add cpf column to clientes if it doesn't exist (migration from cnpj to cpf)
+    try {
+        await exec(`ALTER TABLE clientes ADD COLUMN cpf TEXT`);
+        console.log('Added cpf column to clientes');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
+    // Add cnpj column to clientes if it doesn't exist
+    try {
+        await exec(`ALTER TABLE clientes ADD COLUMN cnpj TEXT`);
+        console.log('Added cnpj column to clientes');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
     // Add paid column to abastecimentos if it doesn't exist
     try {
         await exec(`ALTER TABLE abastecimentos ADD COLUMN paid INTEGER DEFAULT 0`);

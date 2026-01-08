@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Portal do Cliente</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#10b981">
+    <meta name="description" content="Portal do cliente para visualização de fretes - ExcavaNorth">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Cliente">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- PWA Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="cliente-styles.css">
+</head>
+
+<body>
+    <div class="app" id="app">
+        <!-- Login Page -->
+        <div id="loginPage" class="page active">
+            <div class="auth-container">
+                <div class="auth-card glass">
+                    <div class="logo-section">
+                        <div class="logo-icon"><img src="logo_excava.png" alt="Excava Logo"
+                                style="width: 120px; height: 120px;"></div>
+                        <h1>Portal do Cliente</h1>
+                    </div>
+
+                    <!-- Login Form -->
+                    <div id="loginForm" class="form-section">
+                        <form id="loginFormElement">
+                            <div class="input-group">
+                                <label for="loginCpf">CPF</label>
+                                <input type="text" id="loginCpf" placeholder="000.000.000-00" required
+                                    autocomplete="off">
+                                <span class="input-hint">Digite seu CPF</span>
+                            </div>
+                            <div class="input-group">
+                                <label for="loginPassword">Senha</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="loginPassword" placeholder="••••••••" minlength="4"
+                                        required>
+                                    <button type="button" class="password-toggle" data-target="loginPassword"
+                                        aria-label="Mostrar senha">
+                                        <span class="eye-icon"><img src="eye-open.png" alt="Show password"></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-full">
+                                <span>Entrar</span>
+                                <span class="btn-loader hidden"></span>
+                            </button>
+                        </form>
+                        <div class="form-footer">
+                            <p><a href="#" id="showForgotPassword">Esqueceu a Senha?</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Forgot Password Form - Step 1: Enter CPF -->
+                    <div id="forgotPasswordForm" class="form-section hidden">
+                        <h2 class="form-title">Recuperar Senha</h2>
+                        <p class="form-subtitle">Digite seu CPF para receber um código por SMS</p>
+                        <form id="forgotPasswordFormElement">
+                            <div class="input-group">
+                                <label for="forgotCpf">CPF</label>
+                                <input type="text" id="forgotCpf" placeholder="000.000.000-00" required
+                                    autocomplete="off">
+                                <span class="input-hint">Formato: 000.000.000-00</span>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-full">
+                                <span>Enviar Código</span>
+                                <span class="btn-loader hidden"></span>
+                            </button>
+                        </form>
+                        <div class="form-footer">
+                            <p><a href="#" id="backToLoginFromForgot">← Voltar ao Login</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Verify Code Form - Step 2: Enter SMS Code -->
+                    <div id="verifyCodeForm" class="form-section hidden">
+                        <h2 class="form-title">Verificar Código</h2>
+                        <p class="form-subtitle" id="verifyCodeSubtitle">Digite o código enviado por SMS</p>
+                        <form id="verifyCodeFormElement">
+                            <div class="input-group">
+                                <label for="verifyCode">Código de 6 dígitos</label>
+                                <input type="text" id="verifyCode" placeholder="000000" maxlength="6" pattern="[0-9]{6}"
+                                    required autocomplete="off" class="code-input">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-full">
+                                <span>Verificar</span>
+                                <span class="btn-loader hidden"></span>
+                            </button>
+                        </form>
+                        <div class="form-footer">
+                            <p><a href="#" id="resendCode">Reenviar código</a></p>
+                            <p><a href="#" id="backToLoginFromVerify">← Voltar ao Login</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Reset Password Form - Step 3: Enter New Password -->
+                    <div id="resetPasswordForm" class="form-section hidden">
+                        <h2 class="form-title">Nova Senha</h2>
+                        <p class="form-subtitle">Digite sua nova senha</p>
+                        <form id="resetPasswordFormElement">
+                            <div class="input-group">
+                                <label for="newPassword">Nova Senha</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="newPassword" placeholder="Mínimo 4 caracteres"
+                                        minlength="4" required>
+                                    <button type="button" class="password-toggle" data-target="newPassword"
+                                        aria-label="Mostrar senha">
+                                        <span class="eye-icon"><img src="eye-open.png" alt="Show password"></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="confirmPassword">Confirmar Senha</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="confirmPassword" placeholder="Confirme a senha"
+                                        minlength="4" required>
+                                    <button type="button" class="password-toggle" data-target="confirmPassword"
+                                        aria-label="Mostrar senha">
+                                        <span class="eye-icon"><img src="eye-open.png" alt="Show password"></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-full">
+                                <span>Alterar Senha</span>
+                                <span class="btn-loader hidden"></span>
+                            </button>
+                        </form>
+                        <div class="form-footer">
+                            <p><a href="#" id="backToLoginFromReset">← Voltar ao Login</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div id="authError" class="error-message hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Page -->
+        <div id="dashboardPage" class="page hidden">
+            <!-- Header -->
+            <header class="header glass">
+                <div class="header-left">
+                    <div class="logo-icon small"><img src="logo_excava.png" alt="Logo"
+                            style="width: 40px; height: 40px;"></div>
+                    <div class="header-title">
+                        <h1 id="empresaName">Empresa</h1>
+                        <p id="welcomeText">Bem-vindo!</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <button id="logoutBtn" class="btn btn-outline">
+                        Sair
+                    </button>
+                </div>
+            </header>
+
+            <!-- Dashboard Content -->
+            <main class="dashboard-content">
+                <div class="cliente-content" id="clienteContent">
+                    <!-- Summary Cards -->
+                    <section class="summary-cards">
+                        <div class="summary-card glass">
+                            <div class="card-icon">📦</div>
+                            <div class="card-content">
+                                <span class="card-label">Total de Fretes</span>
+                                <span class="card-value" id="totalFreightsCount">0</span>
+                            </div>
+                        </div>
+                        <div class="summary-card glass">
+                            <div class="card-icon">📏</div>
+                            <div class="card-content">
+                                <span class="card-label">Total KM</span>
+                                <span class="card-value" id="totalKm">0</span>
+                            </div>
+                        </div>
+                        <div class="summary-card glass">
+                            <div class="card-icon">⚖️</div>
+                            <div class="card-content">
+                                <span class="card-label">Total Tons</span>
+                                <span class="card-value" id="totalTons">0</span>
+                            </div>
+                        </div>
+                        <div class="summary-card glass highlight">
+                            <div class="card-icon">💰</div>
+                            <div class="card-content">
+                                <span class="card-label">Valor Total</span>
+                                <span class="card-value" id="totalValue">R$ 0,00</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Date Filter -->
+                    <section class="filters glass">
+                        <h3>Filtrar por Período</h3>
+                        <div class="filter-row">
+                            <div class="input-group">
+                                <label for="dateFrom">De</label>
+                                <input type="date" id="dateFrom" class="filter-input">
+                            </div>
+                            <div class="input-group">
+                                <label for="dateTo">Até</label>
+                                <input type="date" id="dateTo" class="filter-input">
+                            </div>
+                            <button class="btn btn-primary" id="filterBtn">Filtrar</button>
+                            <button class="btn btn-outline" id="clearFilterBtn">Limpar</button>
+                            <button class="btn btn-outline" id="exportPdfBtn">📄 Gerar PDF</button>
+                        </div>
+                    </section>
+
+                    <!-- Freights Table -->
+                    <section class="freights-section glass">
+                        <h3>📦 Fretes Realizados</h3>
+                        <div class="table-container">
+                            <table class="data-table" id="freightsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Placa</th>
+                                        <th>KM</th>
+                                        <th>Tons</th>
+                                        <th>Preço (Transp.)</th>
+                                        <th>Valor</th>
+                                        <th>Comp. Descarga</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="freightsTableBody">
+                                    <tr>
+                                        <td colspan="7" class="loading">Carregando...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+
+        <!-- Success/Error Toast -->
+        <div id="toast" class="toast hidden">
+            <span id="toastMessage"></span>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="cliente-app.js"></script>
+</body>
+
+</html>
