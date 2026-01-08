@@ -1,21 +1,23 @@
 // ExcavaNorth PWA Service Worker
-const CACHE_NAME = 'excavanorth-v1';
-const DYNAMIC_CACHE = 'excavanorth-dynamic-v1';
+const CACHE_NAME = 'excavanorth-v2';
+const DYNAMIC_CACHE = 'excavanorth-dynamic-v2';
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
     '/',
     '/index.html',
     '/abastecedor.html',
+    '/cliente.html',
     '/styles.css',
     '/abastecedor-styles.css',
+    '/cliente-styles.css',
     '/app.js',
     '/abastecedor-app.js',
+    '/cliente-app.js',
     '/logo_excava.png',
     '/eye-open.png',
     '/eye-closed.png',
-    '/manifest.json',
-    '/manifest-abastecedor.json'
+    '/manifest.json'
 ];
 
 // API routes that should always go to network

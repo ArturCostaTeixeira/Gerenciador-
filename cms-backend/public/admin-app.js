@@ -4175,8 +4175,9 @@ async function populateExtratoClienteSelect() {
     if (!select) return;
 
     try {
-        const data = await apiRequest('/admin/clients');
-        const empresas = [...new Set(data.clients.map(c => c.empresa).filter(Boolean))].sort();
+        const clientsList = await apiRequest('/admin/clients');
+        // The endpoint returns an array with 'client' property (mapped from 'name')
+        const empresas = [...new Set(clientsList.map(c => c.client || c.name).filter(Boolean))].sort();
 
         select.innerHTML = '<option value="">Selecione um cliente</option>' +
             empresas.map(empresa => `<option value="${empresa}">${empresa}</option>`).join('');

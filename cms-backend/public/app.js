@@ -210,16 +210,26 @@ async function handleLogin(e) {
     hideError();
 
     try {
-        const data = await apiRequest('/auth/driver/login', {
+        // Use unified login - tries all user types
+        const data = await apiRequest('/auth/unified/login', {
             method: 'POST',
             body: JSON.stringify({ cpf, password })
         });
 
         token = data.token;
-        userData = data.driver;
-        localStorage.setItem('driver_token', token);
 
-        await loadDashboard();
+        // Redirect based on user type
+        if (data.userType === 'motorista') {
+            userData = data.user;
+            localStorage.setItem('driver_token', token);
+            await loadDashboard();
+        } else if (data.userType === 'abastecedor') {
+            localStorage.setItem('abastecedor_token', token);
+            window.location.href = '/abastecedor.html';
+        } else if (data.userType === 'cliente') {
+            localStorage.setItem('cliente_token', token);
+            window.location.href = '/cliente.html';
+        }
     } catch (error) {
         showError(error.message);
     } finally {

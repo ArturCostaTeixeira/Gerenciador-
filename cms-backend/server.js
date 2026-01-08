@@ -941,6 +941,74 @@ app.delete('/api/admin/clientes/:id', requireAdmin, async (req, res) => {
     }
 });
 
+// Admin: Get stats for a specific client (empresa)
+app.get('/api/admin/clients/stats/:empresa', requireAdmin, async (req, res) => {
+    try {
+        const empresa = decodeURIComponent(req.params.empresa);
+        const { date_from, date_to } = req.query;
+        const filters = {};
+        if (date_from) filters.date_from = date_from;
+        if (date_to) filters.date_to = date_to;
+
+        const stats = await Cliente.getStats(empresa, filters);
+        res.json({
+            total_freights: stats?.total_freights || 0,
+            total_km: stats?.total_km || 0,
+            total_tons: stats?.total_tons || 0,
+            total_value: stats?.total_value || 0
+        });
+    } catch (error) {
+        console.error('Get admin client stats error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Admin: Get freights for a specific client (empresa)
+app.get('/api/admin/clients/freights/:empresa', requireAdmin, async (req, res) => {
+    try {
+        const empresa = decodeURIComponent(req.params.empresa);
+        const { date_from, date_to } = req.query;
+
+        let sql = `
+            SELECT f.*, d.name as driver_name, d.plate as driver_plate
+            FROM freights f
+            LEFT JOIN drivers d ON f.driver_id = d.id
+            WHERE f.client = ? AND f.status = 'complete'
+        `;
+        const values = [empresa];
+
+        if (date_from) {
+            sql += ' AND f.date >= ?';
+            values.push(date_from);
+        }
+        if (date_to) {
+            sql += ' AND f.date <= ?';
+            values.push(date_to);
+        }
+
+        sql += ' ORDER BY f.date DESC';
+
+        const freights = await query(sql, values);
+        res.json({ freights });
+    } catch (error) {
+        console.error('Get admin client freights error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Admin: Get all clients (empresas) list
+app.get('/api/admin/clients', requireAdmin, async (req, res) => {
+    try {
+        const rows = await query('SELECT * FROM clients ORDER BY name');
+        // Map 'name' to 'client' for compatibility with frontend
+        const clients = rows.map(r => ({ ...r, client: r.name }));
+        res.json(clients);
+    } catch (error) {
+        console.error('Get clients error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Admin: Reset abastecedor password (to first 4 digits of CPF)
 app.patch('/api/admin/abastecedores/:id/reset-password', requireAdmin, async (req, res) => {
     try {

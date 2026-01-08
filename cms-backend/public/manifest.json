@@ -1,13 +1,13 @@
 {
     "id": "/index.html",
-    "name": "Portal do Motorista - ExcavaNorth",
-    "short_name": "Motorista",
-    "description": "Gerenciador de fretes e comprovantes para motoristas",
+    "name": "ExcavaNorth",
+    "short_name": "ExcavaNorth",
+    "description": "Sistema de gerenciamento de fretes, abastecimentos e logística",
     "start_url": "/index.html",
     "scope": "/",
     "display": "standalone",
     "background_color": "#0f1419",
-    "theme_color": "#1a73e8",
+    "theme_color": "#6366f1",
     "orientation": "portrait-primary",
     "categories": [
         "business",
@@ -76,40 +76,14 @@
             "sizes": "512x512",
             "type": "image/png",
             "form_factor": "narrow",
-            "label": "Portal do Motorista"
+            "label": "ExcavaNorth"
         },
         {
             "src": "/icons/icon-512x512.png",
             "sizes": "512x512",
             "type": "image/png",
             "form_factor": "wide",
-            "label": "Portal do Motorista - Desktop"
-        }
-    ],
-    "shortcuts": [
-        {
-            "name": "Comprovante de Carga",
-            "short_name": "Carga",
-            "description": "Enviar comprovante de carga/descarga",
-            "url": "/index.html#carga",
-            "icons": [
-                {
-                    "src": "/icons/icon-96x96.png",
-                    "sizes": "96x96"
-                }
-            ]
-        },
-        {
-            "name": "Extrato",
-            "short_name": "Extrato",
-            "description": "Ver extrato financeiro",
-            "url": "/index.html#extrato",
-            "icons": [
-                {
-                    "src": "/icons/icon-96x96.png",
-                    "sizes": "96x96"
-                }
-            ]
+            "label": "ExcavaNorth - Desktop"
         }
     ]
 }

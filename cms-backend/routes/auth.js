@@ -155,6 +155,111 @@ router.post('/driver/login', async (req, res) => {
 });
 
 /**
+ * POST /api/auth/unified/login
+ * Unified login - tries all user types (driver, abastecedor, cliente)
+ * Returns JWT token and user type for routing
+ */
+router.post('/unified/login', async (req, res) => {
+    try {
+        const { cpf, password } = req.body;
+
+        // Validate input
+        if (!cpf || !password) {
+            return res.status(400).json({ error: 'CPF e senha são obrigatórios' });
+        }
+
+        // Clean CPF (remove formatting)
+        const cleanCpf = cpf.replace(/\D/g, '');
+        if (cleanCpf.length !== 11) {
+            return res.status(400).json({ error: 'CPF inválido. Deve ter 11 dígitos.' });
+        }
+
+        // Try driver first
+        const driver = await Driver.verifyPasswordByCpf(cleanCpf, password);
+        if (driver) {
+            if (!driver.active) {
+                return res.status(401).json({ error: 'Conta do motorista está inativa' });
+            }
+
+            const token = generateToken({
+                id: driver.id,
+                name: driver.name,
+                plate: driver.plate
+            }, 'driver');
+
+            return res.json({
+                message: 'Login successful',
+                token,
+                userType: 'motorista',
+                user: {
+                    id: driver.id,
+                    name: driver.name,
+                    plate: driver.plate,
+                    authenticated: driver.authenticated
+                }
+            });
+        }
+
+        // Try abastecedor
+        const abastecedor = await Abastecedor.verifyPassword(cleanCpf, password);
+        if (abastecedor) {
+            if (!abastecedor.active) {
+                return res.status(401).json({ error: 'Conta de abastecedor inativa' });
+            }
+
+            const token = generateToken({
+                id: abastecedor.id,
+                name: abastecedor.name,
+                cpf: abastecedor.cpf
+            }, 'abastecedor');
+
+            return res.json({
+                message: 'Login successful',
+                token,
+                userType: 'abastecedor',
+                user: {
+                    id: abastecedor.id,
+                    name: abastecedor.name
+                }
+            });
+        }
+
+        // Try cliente
+        const cliente = await Cliente.verifyPassword(cleanCpf, password);
+        if (cliente) {
+            if (!cliente.active) {
+                return res.status(401).json({ error: 'Conta de cliente inativa' });
+            }
+
+            const token = generateToken({
+                id: cliente.id,
+                name: cliente.name,
+                empresa: cliente.empresa,
+                cpf: cliente.cpf
+            }, 'cliente');
+
+            return res.json({
+                message: 'Login successful',
+                token,
+                userType: 'cliente',
+                user: {
+                    id: cliente.id,
+                    name: cliente.name,
+                    empresa: cliente.empresa
+                }
+            });
+        }
+
+        // No match found
+        return res.status(401).json({ error: 'CPF ou senha inválidos' });
+
+    } catch (error) {
+        console.error('Unified login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
  * POST /api/auth/admin/login
  * Admin login with username and password
  * Returns JWT token
