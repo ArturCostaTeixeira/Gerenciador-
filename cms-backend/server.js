@@ -421,6 +421,49 @@ app.post('/api/driver/upload-comprovante-abastecimento', requireDriver, driverUp
     }
 });
 
+// Driver upload comprovante de outros insumos (proof of payment for other supplies)
+app.post('/api/driver/upload-comprovante-outros-insumos', requireDriver, driverUpload.single('comprovante_outros_insumos'), async (req, res) => {
+    try {
+        const driverId = req.driver.id;
+
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const file = req.file;
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+        const filename = `driver-${driverId}-outros-insumos-${uniqueSuffix}${ext}`;
+
+        // Upload to Vercel Blob
+        const { url: filePath } = await uploadToBlob(file.buffer, filename, file.mimetype);
+        const today = new Date().toISOString().split('T')[0];
+
+        // Get description and plate from request body
+        const description = req.body.description || 'Outros Insumos';
+        const plate = req.body.plate || null;
+
+        // Create a pending outros insumo with the comprovante
+        // Admin will complete the entry with quantity and price later
+        const outrosInsumo = await OutrosInsumo.createPending({
+            driver_id: driverId,
+            date: today,
+            plate: plate,
+            comprovante: filePath,
+            description: description
+        });
+
+        res.json({
+            message: 'Comprovante de outros insumos uploaded successfully',
+            file: filePath,
+            outrosInsumo
+        });
+    } catch (error) {
+        console.error('Upload comprovante outros insumos error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

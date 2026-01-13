@@ -44,7 +44,7 @@ adminRouter.use(requireAdmin);
  */
 adminRouter.post('/', async (req, res) => {
     try {
-        const { driver_id, date, quantity, description, unit_price } = req.body;
+        const { driver_id, date, quantity, description, unit_price, plate } = req.body;
 
         // Validate input
         if (!driver_id || !date || quantity === undefined || unit_price === undefined) {
@@ -73,7 +73,7 @@ adminRouter.post('/', async (req, res) => {
             return res.status(404).json({ error: 'Driver not found' });
         }
 
-        const outrosInsumo = await OutrosInsumo.create({ driver_id, date, quantity, description: description || '', unit_price });
+        const outrosInsumo = await OutrosInsumo.create({ driver_id, date, quantity, description: description || '', unit_price, plate: plate || null });
         res.status(201).json(outrosInsumo);
     } catch (error) {
         console.error('Create outros insumo error:', error);
@@ -143,6 +143,9 @@ adminRouter.put('/:id', upload.single('comprovante'), async (req, res) => {
         }
         if (req.body.unit_price !== undefined) {
             updateData.unit_price = parseFloat(req.body.unit_price);
+        }
+        if (req.body.plate !== undefined) {
+            updateData.plate = req.body.plate || null;
         }
 
         // Calculate new total value if quantity or unit_price changed

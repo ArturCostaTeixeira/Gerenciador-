@@ -250,6 +250,11 @@
                         <span class="action-text">Comprovante de<br>Abastecimento</span>
                     </button>
 
+                    <button class="action-btn glass" id="btnComprovanteOutrosInsumos">
+                        <span class="action-icon">📋</span>
+                        <span class="action-text">Comprovante de<br>Outros Insumos</span>
+                    </button>
+
                     <button class="action-btn glass" id="btnExtrato">
                         <span class="action-icon">📊</span>
                         <span class="action-text">Extrato</span>
@@ -541,6 +546,38 @@
                         <button class="btn btn-primary btn-round" id="capturePhotoAbast">📸</button>
                         <button class="btn btn-outline btn-round hidden" id="retakePhotoAbast">🔄</button>
                         <button class="btn btn-success btn-round hidden" id="sendPhotoAbast">✓</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Camera Modal for Comprovante de Outros Insumos -->
+        <div id="cameraModalOutrosInsumos" class="modal hidden">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content glass camera-modal">
+                <div class="modal-header">
+                    <h2>📋 Comprovante de Outros Insumos</h2>
+                    <button class="modal-close" id="closeCameraModalOutrosInsumos">&times;</button>
+                </div>
+                <div class="modal-body camera-body">
+                    <video id="cameraVideoOutrosInsumos" autoplay playsinline></video>
+                    <canvas id="cameraCanvasOutrosInsumos" class="hidden"></canvas>
+                    <img id="photoPreviewOutrosInsumos" class="photo-preview hidden">
+                </div>
+                <div class="modal-footer camera-footer">
+                    <div class="plate-select-container hidden" id="plateSelectContainerOutrosInsumos">
+                        <label>Selecione a Placa:</label>
+                        <select id="plateSelectOutrosInsumos" class="plate-select"></select>
+                    </div>
+                    <div class="input-group outros-insumos-description" style="margin: 0.5rem 0; width: 100%;">
+                        <label style="color: var(--text-secondary); font-size: 0.85rem;">Descrição (opcional):</label>
+                        <input type="text" id="descriptionOutrosInsumos" placeholder="Ex: Pneu, Óleo, Peça..."
+                            style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border); background: var(--background-elevated); color: var(--text-primary);">
+                    </div>
+                    <div class="camera-actions">
+                        <button class="btn btn-primary btn-round" id="capturePhotoOutrosInsumos">📸</button>
+                        <button class="btn btn-outline btn-round hidden" id="retakePhotoOutrosInsumos">🔄</button>
+                        <button class="btn btn-success btn-round hidden" id="sendPhotoOutrosInsumos">✓</button>
                     </div>
                 </div>
             </div>

@@ -286,6 +286,14 @@ async function initDatabase() {
         // Column already exists, ignore
     }
 
+    // Add plate column to outros_insumos for tracking which vehicle the expense was for
+    try {
+        await exec(`ALTER TABLE outros_insumos ADD COLUMN plate TEXT`);
+        console.log('Added plate column to outros_insumos');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
     // Add transportadora fields to freights if they don't exist
     try {
         await exec(`ALTER TABLE freights ADD COLUMN price_per_km_ton_transportadora REAL`);

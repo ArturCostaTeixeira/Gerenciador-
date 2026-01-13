@@ -5,11 +5,11 @@ const OutrosInsumo = {
     /**
      * Create a new outros insumo record
      * Automatically calculates total_value based on quantity and unit_price
-     * @param {Object} data - {driver_id, date, quantity, description, unit_price}
+     * @param {Object} data - {driver_id, date, quantity, description, unit_price, plate, comprovante}
      * @returns {Object} - Created outros insumo with calculated total_value
      */
     async create(data) {
-        const { driver_id, date, quantity, description, unit_price } = data;
+        const { driver_id, date, quantity, description, unit_price, plate, comprovante } = data;
 
         // Verify driver exists
         const driver = await Driver.findById(driver_id);
@@ -21,9 +21,31 @@ const OutrosInsumo = {
         const total_value = quantity * unit_price;
 
         const result = await execute(`
-            INSERT INTO outros_insumos (driver_id, date, quantity, description, unit_price, total_value)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `, [driver_id, date, quantity, description, unit_price, total_value]);
+            INSERT INTO outros_insumos (driver_id, date, quantity, description, unit_price, total_value, plate, comprovante)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [driver_id, date, quantity, description, unit_price, total_value, plate || null, comprovante || null]);
+        return this.findById(result.lastInsertRowid);
+    },
+
+    /**
+     * Create a pending outros insumo record (from driver upload)
+     * The admin will complete the record later with quantity and price
+     * @param {Object} data - {driver_id, date, plate, comprovante, description}
+     * @returns {Object} - Created pending outros insumo
+     */
+    async createPending(data) {
+        const { driver_id, date, plate, comprovante, description } = data;
+
+        // Verify driver exists
+        const driver = await Driver.findById(driver_id);
+        if (!driver) {
+            throw new Error('Driver not found');
+        }
+
+        const result = await execute(`
+            INSERT INTO outros_insumos (driver_id, date, quantity, description, unit_price, total_value, plate, comprovante)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [driver_id, date, 1, description || 'Outros Insumos', 0, 0, plate || null, comprovante || null]);
         return this.findById(result.lastInsertRowid);
     },
 
@@ -122,7 +144,7 @@ const OutrosInsumo = {
      * @returns {Object|null} - Updated outros insumo or null
      */
     async update(id, data) {
-        const { date, quantity, description, unit_price, total_value, comprovante } = data;
+        const { date, quantity, description, unit_price, total_value, comprovante, plate } = data;
         const updates = [];
         const values = [];
 
@@ -149,6 +171,10 @@ const OutrosInsumo = {
         if (comprovante !== undefined) {
             updates.push('comprovante = ?');
             values.push(comprovante);
+        }
+        if (plate !== undefined) {
+            updates.push('plate = ?');
+            values.push(plate);
         }
 
         if (updates.length === 0) {

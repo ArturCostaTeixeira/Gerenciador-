@@ -2296,7 +2296,7 @@ function renderOutrosInsumosTable() {
     document.getElementById('outrosInsumosNextBtn').disabled = pagination.outrosInsumos.page === totalPages;
 
     tbody.innerHTML = pageItems.length === 0
-        ? '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">Nenhum insumo encontrado</td></tr>'
+        ? '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">Nenhum insumo encontrado</td></tr>'
         : pageItems.map(oi => {
             // Status badge for paid status
             const isPaid = oi.paid === 1 || oi.paid === true;
@@ -2317,9 +2317,14 @@ function renderOutrosInsumosTable() {
                 comprovanteCell = '<span class="text-muted">-</span>';
             }
 
+            // Get driver info
+            const driver = drivers.find(d => d.id === oi.driver_id);
+
             return `
                 <tr>
                     <td>${formatDate(oi.date)}</td>
+                    <td>${oi.driver_name || driver?.name || '-'}</td>
+                    <td>${oi.plate || oi.driver_plate || driver?.plate || '-'}</td>
                     <td>${formatNumber(oi.quantity)}</td>
                     <td>${oi.description || '-'}</td>
                     <td>${formatCurrency(oi.unit_price)}</td>
@@ -2334,10 +2339,40 @@ function renderOutrosInsumosTable() {
 
 function showAddOutrosInsumoModal() {
     const options = drivers.map(d => `<option value="${d.id}">${d.name} (${d.plate})</option>`).join('');
+
+    // Helper function to get all plates for a driver
+    const getDriverPlates = (driver) => {
+        if (!driver) return [];
+        let plates = [];
+        if (driver.plate) plates.push(driver.plate);
+        if (driver.plates) {
+            try {
+                const additionalPlates = typeof driver.plates === 'string' ? JSON.parse(driver.plates) : driver.plates;
+                if (Array.isArray(additionalPlates)) {
+                    plates = [...new Set([...plates, ...additionalPlates])];
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
+        return plates;
+    };
+
+    // Get initial plate options for the first driver
+    const firstDriver = drivers.length > 0 ? drivers[0] : null;
+    const initialPlates = getDriverPlates(firstDriver);
+    const initialPlateOptions = initialPlates.length > 0
+        ? initialPlates.map(p => `<option value="${p}">${p}</option>`).join('')
+        : '<option value="">Nenhuma placa</option>';
+
     showModal('Novo Insumo', `
         <div class="input-group">
             <label>Motorista</label>
             <select id="newOutrosDriver" required>${options}</select>
+        </div>
+        <div class="input-group">
+            <label>Placa</label>
+            <select id="newOutrosPlate">${initialPlateOptions}</select>
         </div>
         <div class="input-group">
             <label>Data</label>
@@ -2360,6 +2395,7 @@ function showAddOutrosInsumoModal() {
             method: 'POST',
             body: JSON.stringify({
                 driver_id: parseInt(document.getElementById('newOutrosDriver').value),
+                plate: document.getElementById('newOutrosPlate').value,
                 date: document.getElementById('newOutrosDate').value,
                 quantity: parseFloat(document.getElementById('newOutrosQuantity').value),
                 description: document.getElementById('newOutrosDescription').value,
@@ -2369,6 +2405,24 @@ function showAddOutrosInsumoModal() {
         await loadOutrosInsumos();
         await loadClients();
     });
+
+    // Attach driver change handler to update plates dropdown
+    setTimeout(() => {
+        const driverSelect = document.getElementById('newOutrosDriver');
+        const plateSelect = document.getElementById('newOutrosPlate');
+
+        if (driverSelect && plateSelect) {
+            driverSelect.addEventListener('change', function () {
+                const selectedDriverId = parseInt(this.value);
+                const selectedDriver = drivers.find(d => d.id === selectedDriverId);
+                const plates = getDriverPlates(selectedDriver);
+
+                plateSelect.innerHTML = plates.length > 0
+                    ? plates.map(p => `<option value="${p}">${p}</option>`).join('')
+                    : '<option value="">Nenhuma placa</option>';
+            });
+        }
+    }, 100);
 }
 
 // Edit outros insumo
@@ -2376,11 +2430,47 @@ window.editOutrosInsumo = async function (id) {
     const insumo = allOutrosInsumos.find(oi => oi.id === id);
     if (!insumo) return;
 
+    // Build driver options dropdown
+    const driverOptions = drivers.map(d =>
+        `<option value="${d.id}" ${insumo.driver_id === d.id ? 'selected' : ''}>${d.name}</option>`
+    ).join('');
+
+    // Get plates for the current driver
+    const currentDriver = drivers.find(d => d.id === insumo.driver_id);
+    const currentPlate = insumo.plate || insumo.driver_plate || '';
+
+    // Helper function to get all plates for a driver
+    const getDriverPlates = (driver) => {
+        if (!driver) return [];
+        let plates = [];
+        if (driver.plate) plates.push(driver.plate);
+        if (driver.plates) {
+            try {
+                const additionalPlates = typeof driver.plates === 'string' ? JSON.parse(driver.plates) : driver.plates;
+                if (Array.isArray(additionalPlates)) {
+                    plates = [...new Set([...plates, ...additionalPlates])];
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
+        return plates;
+    };
+
+    const currentDriverPlates = getDriverPlates(currentDriver);
+    const plateOptions = currentDriverPlates.map(p =>
+        `<option value="${p}" ${currentPlate === p ? 'selected' : ''}>${p}</option>`
+    ).join('') || '<option value="">Nenhuma placa</option>';
+
     showModal('Editar Outros Insumos', `
         <input type="hidden" id="editOutrosId" value="${id}">
         <div class="input-group">
             <label>Motorista</label>
-            <input type="text" value="${insumo.driver_name || '-'}" disabled>
+            <select id="editOutrosDriver" required>${driverOptions}</select>
+        </div>
+        <div class="input-group">
+            <label>Placa</label>
+            <select id="editOutrosPlate">${plateOptions}</select>
         </div>
         <div class="input-group">
             <label>Data</label>
@@ -2409,6 +2499,7 @@ window.editOutrosInsumo = async function (id) {
         formData.append('quantity', parseFloat(document.getElementById('editOutrosQuantity').value));
         formData.append('description', document.getElementById('editOutrosDescription').value);
         formData.append('unit_price', parseFloat(document.getElementById('editOutrosPrice').value));
+        formData.append('plate', document.getElementById('editOutrosPlate').value);
 
         const comprovanteFile = document.getElementById('editOutrosComprovante').files[0];
         if (comprovanteFile) formData.append('comprovante', comprovanteFile);
@@ -2445,6 +2536,24 @@ window.editOutrosInsumo = async function (id) {
 
         await loadOutrosInsumos();
     });
+
+    // Add event listener to update plate dropdown when driver changes
+    setTimeout(() => {
+        const driverSelect = document.getElementById('editOutrosDriver');
+        const plateSelect = document.getElementById('editOutrosPlate');
+
+        if (driverSelect && plateSelect) {
+            driverSelect.addEventListener('change', function () {
+                const selectedDriverId = parseInt(this.value);
+                const selectedDriver = drivers.find(d => d.id === selectedDriverId);
+                const plates = getDriverPlates(selectedDriver);
+
+                plateSelect.innerHTML = plates.length > 0
+                    ? plates.map(p => `<option value="${p}">${p}</option>`).join('')
+                    : '<option value="">Nenhuma placa</option>';
+            });
+        }
+    }, 100);
 };
 
 // ========================================

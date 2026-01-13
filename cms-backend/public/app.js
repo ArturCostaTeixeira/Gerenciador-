@@ -935,6 +935,142 @@ async function sendPhotoAbast() {
     }
 }
 
+async function sendPhotoOutrosInsumos() {
+    if (!capturedPhotoBlob) {
+        showToast('Nenhuma foto capturada', 'error');
+        return;
+    }
+
+    const selectedPlate = getSelectedPlate('plateSelectOutrosInsumos');
+    const descriptionInput = document.getElementById('descriptionOutrosInsumos');
+    const description = descriptionInput ? descriptionInput.value.trim() : 'Outros Insumos';
+
+    const formData = new FormData();
+    const filename = `comprovante_outros_insumos_${Date.now()}.jpg`;
+    formData.append('comprovante_outros_insumos', capturedPhotoBlob, filename);
+    if (selectedPlate) {
+        formData.append('plate', selectedPlate);
+    }
+    formData.append('description', description || 'Outros Insumos');
+
+    try {
+        const response = await fetch(`${API_BASE}/driver/upload-comprovante-outros-insumos`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+
+        if (response.ok) {
+            showToast('Comprovante de outros insumos enviado com sucesso!', 'success');
+            closeCameraModalOutrosInsumos();
+        } else {
+            const data = await response.json();
+            throw new Error(data.error || 'Erro ao enviar');
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        showToast('Erro ao enviar comprovante. Tente novamente.', 'error');
+    }
+}
+
+function closeCameraModalOutrosInsumos() {
+    const modal = document.getElementById('cameraModalOutrosInsumos');
+    modal.classList.add('hidden');
+
+    // Stop camera stream
+    if (currentCameraStream) {
+        currentCameraStream.getTracks().forEach(track => track.stop());
+        currentCameraStream = null;
+    }
+
+    // Reset UI
+    document.getElementById('cameraVideoOutrosInsumos').classList.remove('hidden');
+    document.getElementById('photoPreviewOutrosInsumos').classList.add('hidden');
+    document.getElementById('capturePhotoOutrosInsumos').classList.remove('hidden');
+    document.getElementById('retakePhotoOutrosInsumos').classList.add('hidden');
+    document.getElementById('sendPhotoOutrosInsumos').classList.add('hidden');
+
+    // Clear description input
+    const descriptionInput = document.getElementById('descriptionOutrosInsumos');
+    if (descriptionInput) {
+        descriptionInput.value = '';
+    }
+
+    capturedPhotoBlob = null;
+}
+
+async function openCameraModalOutrosInsumos() {
+    const modal = document.getElementById('cameraModalOutrosInsumos');
+    modal.classList.remove('hidden');
+
+    const video = document.getElementById('cameraVideoOutrosInsumos');
+
+    // Populate plate selection if driver has multiple plates
+    populatePlateSelect('plateSelectOutrosInsumos', 'plateSelectContainerOutrosInsumos');
+
+    try {
+        // Request camera with rear camera preference for mobile
+        const constraints = {
+            video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            }
+        };
+
+        currentCameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = currentCameraStream;
+    } catch (error) {
+        console.error('Camera error:', error);
+        showToast('Erro ao acessar câmera. Verifique as permissões.', 'error');
+        closeCameraModalOutrosInsumos();
+    }
+}
+
+function capturePhotoOutrosInsumos() {
+    const video = document.getElementById('cameraVideoOutrosInsumos');
+    const canvas = document.getElementById('cameraCanvasOutrosInsumos');
+    const preview = document.getElementById('photoPreviewOutrosInsumos');
+
+    // Set canvas size to video size
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Draw video frame to canvas
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+
+    // Convert to blob
+    canvas.toBlob((blob) => {
+        capturedPhotoBlob = blob;
+        preview.src = URL.createObjectURL(blob);
+
+        // Show preview, hide video
+        video.classList.add('hidden');
+        preview.classList.remove('hidden');
+
+        // Update buttons
+        document.getElementById('capturePhotoOutrosInsumos').classList.add('hidden');
+        document.getElementById('retakePhotoOutrosInsumos').classList.remove('hidden');
+        document.getElementById('sendPhotoOutrosInsumos').classList.remove('hidden');
+    }, 'image/jpeg', 0.9);
+}
+
+function retakePhotoOutrosInsumos() {
+    // Show video, hide preview
+    document.getElementById('cameraVideoOutrosInsumos').classList.remove('hidden');
+    document.getElementById('photoPreviewOutrosInsumos').classList.add('hidden');
+
+    // Update buttons
+    document.getElementById('capturePhotoOutrosInsumos').classList.remove('hidden');
+    document.getElementById('retakePhotoOutrosInsumos').classList.add('hidden');
+    document.getElementById('sendPhotoOutrosInsumos').classList.add('hidden');
+
+    capturedPhotoBlob = null;
+}
+
 // ========================================
 // Plate Input Formatting
 // ========================================
@@ -1403,6 +1539,13 @@ function init() {
         openCameraModal('cameraModalAbast');
     });
 
+    const btnComprovanteOutrosInsumos = document.getElementById('btnComprovanteOutrosInsumos');
+    if (btnComprovanteOutrosInsumos) {
+        btnComprovanteOutrosInsumos.addEventListener('click', () => {
+            openCameraModalOutrosInsumos();
+        });
+    }
+
     document.getElementById('btnExtrato').addEventListener('click', showExtrato);
 
     // Plates management button
@@ -1482,11 +1625,36 @@ function init() {
     });
     document.getElementById('sendPhotoAbast').addEventListener('click', sendPhotoAbast);
 
+    // Camera Modal - Outros Insumos
+    const closeCameraModalOutrosInsumosBtn = document.getElementById('closeCameraModalOutrosInsumos');
+    if (closeCameraModalOutrosInsumosBtn) {
+        closeCameraModalOutrosInsumosBtn.addEventListener('click', () => {
+            closeCameraModalOutrosInsumos();
+        });
+    }
+    const capturePhotoOutrosInsumosBtn = document.getElementById('capturePhotoOutrosInsumos');
+    if (capturePhotoOutrosInsumosBtn) {
+        capturePhotoOutrosInsumosBtn.addEventListener('click', () => {
+            capturePhotoOutrosInsumos();
+        });
+    }
+    const retakePhotoOutrosInsumosBtn = document.getElementById('retakePhotoOutrosInsumos');
+    if (retakePhotoOutrosInsumosBtn) {
+        retakePhotoOutrosInsumosBtn.addEventListener('click', () => {
+            retakePhotoOutrosInsumos();
+        });
+    }
+    const sendPhotoOutrosInsumosBtn = document.getElementById('sendPhotoOutrosInsumos');
+    if (sendPhotoOutrosInsumosBtn) {
+        sendPhotoOutrosInsumosBtn.addEventListener('click', sendPhotoOutrosInsumos);
+    }
+
     // Modal backdrop clicks
     document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
         backdrop.addEventListener('click', () => {
             closeCameraModal('cameraModalCarga');
             closeCameraModal('cameraModalAbast');
+            closeCameraModalOutrosInsumos();
         });
     });
 
