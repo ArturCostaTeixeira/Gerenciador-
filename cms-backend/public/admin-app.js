@@ -3779,6 +3779,10 @@ async function exportExtratoPDF() {
 function initExtratosPage() {
     const driverSelect = document.getElementById('extratoDriverSelect');
     const exportBtn = document.getElementById('exportExtratoBtn');
+    const filterBtn = document.getElementById('extratoDriverFilterBtn');
+    const clearFilterBtn = document.getElementById('extratoDriverClearFilterBtn');
+    const dateFrom = document.getElementById('extratoDriverDateFrom');
+    const dateTo = document.getElementById('extratoDriverDateTo');
 
     if (driverSelect) {
         driverSelect.addEventListener('change', (e) => {
@@ -3787,11 +3791,35 @@ function initExtratosPage() {
                 selectedExtratoDriverId = parseInt(driverId);
                 loadAdminExtrato(selectedExtratoDriverId);
                 if (exportBtn) exportBtn.style.display = 'inline-flex';
+                if (filterBtn) filterBtn.style.display = 'inline-flex';
+                if (clearFilterBtn) clearFilterBtn.style.display = 'inline-flex';
             } else {
                 selectedExtratoDriverId = null;
                 document.getElementById('extratoContent').style.display = 'none';
                 document.getElementById('extratoPlaceholder').style.display = 'block';
                 if (exportBtn) exportBtn.style.display = 'none';
+                if (filterBtn) filterBtn.style.display = 'none';
+                if (clearFilterBtn) clearFilterBtn.style.display = 'none';
+            }
+        });
+    }
+
+    // Filter button click handler
+    if (filterBtn) {
+        filterBtn.addEventListener('click', () => {
+            if (selectedExtratoDriverId) {
+                loadAdminExtrato(selectedExtratoDriverId);
+            }
+        });
+    }
+
+    // Clear filter button click handler
+    if (clearFilterBtn) {
+        clearFilterBtn.addEventListener('click', () => {
+            if (dateFrom) dateFrom.value = '';
+            if (dateTo) dateTo.value = '';
+            if (selectedExtratoDriverId) {
+                loadAdminExtrato(selectedExtratoDriverId);
             }
         });
     }
@@ -3817,10 +3845,34 @@ async function loadAdminExtrato(driverId) {
     document.getElementById('extratoContent').style.display = 'block';
     document.getElementById('extratoPlaceholder').style.display = 'none';
 
-    // Get driver data from existing arrays
-    const driverFreights = allFreights.filter(f => f.driver_id === driverId && f.status === 'complete');
-    const driverAbast = allAbastecimentos.filter(a => a.driver_id === driverId);
-    const driverInsumos = allOutrosInsumos.filter(oi => oi.driver_id === driverId);
+    // Get date filter values
+    const dateFromInput = document.getElementById('extratoDriverDateFrom');
+    const dateToInput = document.getElementById('extratoDriverDateTo');
+    const dateFrom = dateFromInput?.value || null;
+    const dateTo = dateToInput?.value || null;
+
+    // Helper function to check if date is in range
+    const isInDateRange = (dateStr) => {
+        if (!dateFrom && !dateTo) return true;
+        if (dateFrom && dateStr < dateFrom) return false;
+        if (dateTo && dateStr > dateTo) return false;
+        return true;
+    };
+
+    // Get driver data from existing arrays with date filtering
+    const driverFreights = allFreights.filter(f =>
+        f.driver_id === driverId &&
+        f.status === 'complete' &&
+        isInDateRange(f.date)
+    );
+    const driverAbast = allAbastecimentos.filter(a =>
+        a.driver_id === driverId &&
+        isInDateRange(a.date)
+    );
+    const driverInsumos = allOutrosInsumos.filter(oi =>
+        oi.driver_id === driverId &&
+        isInDateRange(oi.date)
+    );
 
     // Calculate stats
     const totalFretes = driverFreights.reduce((sum, f) => sum + (f.total_value || 0), 0);
@@ -3958,6 +4010,10 @@ let cachedExtratoPlateData = null; // Cache for export
 function initExtratosCaminhoesPage() {
     const plateSelect = document.getElementById('extratoPlateSelect');
     const exportBtn = document.getElementById('exportExtratoPlateBtn');
+    const filterBtn = document.getElementById('extratoPlateFilterBtn');
+    const clearFilterBtn = document.getElementById('extratoPlateClearFilterBtn');
+    const dateFrom = document.getElementById('extratoPlateDateFrom');
+    const dateTo = document.getElementById('extratoPlateDateTo');
 
     if (plateSelect) {
         plateSelect.addEventListener('change', (e) => {
@@ -3966,11 +4022,35 @@ function initExtratosCaminhoesPage() {
                 selectedExtratoPlate = plate;
                 loadPlateExtrato(plate);
                 if (exportBtn) exportBtn.style.display = 'inline-flex';
+                if (filterBtn) filterBtn.style.display = 'inline-flex';
+                if (clearFilterBtn) clearFilterBtn.style.display = 'inline-flex';
             } else {
                 selectedExtratoPlate = null;
                 document.getElementById('extratoPlateContent').style.display = 'none';
                 document.getElementById('extratoPlaceholderPlate').style.display = 'block';
                 if (exportBtn) exportBtn.style.display = 'none';
+                if (filterBtn) filterBtn.style.display = 'none';
+                if (clearFilterBtn) clearFilterBtn.style.display = 'none';
+            }
+        });
+    }
+
+    // Filter button click handler
+    if (filterBtn) {
+        filterBtn.addEventListener('click', () => {
+            if (selectedExtratoPlate) {
+                loadPlateExtrato(selectedExtratoPlate);
+            }
+        });
+    }
+
+    // Clear filter button click handler
+    if (clearFilterBtn) {
+        clearFilterBtn.addEventListener('click', () => {
+            if (dateFrom) dateFrom.value = '';
+            if (dateTo) dateTo.value = '';
+            if (selectedExtratoPlate) {
+                loadPlateExtrato(selectedExtratoPlate);
             }
         });
     }
@@ -4022,16 +4102,32 @@ function loadPlateExtrato(plate) {
     document.getElementById('extratoPlateContent').style.display = 'block';
     document.getElementById('extratoPlaceholderPlate').style.display = 'none';
 
+    // Get date filter values
+    const dateFromInput = document.getElementById('extratoPlateDateFrom');
+    const dateToInput = document.getElementById('extratoPlateDateTo');
+    const dateFrom = dateFromInput?.value || null;
+    const dateTo = dateToInput?.value || null;
+
+    // Helper function to check if date is in range
+    const isInDateRange = (dateStr) => {
+        if (!dateFrom && !dateTo) return true;
+        if (dateFrom && dateStr < dateFrom) return false;
+        if (dateTo && dateStr > dateTo) return false;
+        return true;
+    };
+
     const normalizedPlate = plate.toUpperCase();
 
-    // Filter data by plate
+    // Filter data by plate with date filtering
     const plateFreights = allFreights.filter(f =>
         f.status === 'complete' &&
-        (f.plate?.toUpperCase() === normalizedPlate)
+        (f.plate?.toUpperCase() === normalizedPlate) &&
+        isInDateRange(f.date)
     );
 
     const plateAbast = allAbastecimentos.filter(a =>
-        a.plate?.toUpperCase() === normalizedPlate
+        a.plate?.toUpperCase() === normalizedPlate &&
+        isInDateRange(a.date)
     );
 
     // For outros insumos, we need to find driver_ids associated with this plate
@@ -4051,7 +4147,10 @@ function loadPlateExtrato(plate) {
         }
     });
 
-    const plateInsumos = allOutrosInsumos.filter(oi => driverIdsWithPlate.has(oi.driver_id));
+    const plateInsumos = allOutrosInsumos.filter(oi =>
+        driverIdsWithPlate.has(oi.driver_id) &&
+        isInDateRange(oi.date)
+    );
 
     // Calculate stats
     const totalFretes = plateFreights.reduce((sum, f) => sum + (f.total_value || 0), 0);

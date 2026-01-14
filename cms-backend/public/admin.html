@@ -616,10 +616,24 @@
                     <div class="page-header">
                         <button class="btn btn-outline" onclick="backToExtratosHub()">← Voltar</button>
                         <h1>👤 Extratos Motoristas</h1>
-                        <div style="display: flex; gap: 1rem; align-items: center;">
+                        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                             <select id="extratoDriverSelect" class="filter-input" style="max-width: 300px;">
                                 <option value="">Selecione um motorista</option>
                             </select>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <label style="font-size: 0.85rem; color: var(--text-muted);">De:</label>
+                                <input type="date" id="extratoDriverDateFrom" class="filter-input"
+                                    style="max-width: 150px;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <label style="font-size: 0.85rem; color: var(--text-muted);">Até:</label>
+                                <input type="date" id="extratoDriverDateTo" class="filter-input"
+                                    style="max-width: 150px;">
+                            </div>
+                            <button class="btn btn-outline" id="extratoDriverFilterBtn"
+                                style="display: none;">Filtrar</button>
+                            <button class="btn btn-outline" id="extratoDriverClearFilterBtn"
+                                style="display: none;">Limpar</button>
                             <button class="btn btn-primary" id="exportExtratoBtn" style="display: none;">📄 Exportar
                                 PDF</button>
                         </div>
@@ -746,10 +760,24 @@
                     <div class="page-header">
                         <button class="btn btn-outline" onclick="backToExtratosHub()">← Voltar</button>
                         <h1>🚛 Extratos Caminhões</h1>
-                        <div style="display: flex; gap: 1rem; align-items: center;">
+                        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                             <select id="extratoPlateSelect" class="filter-input" style="max-width: 300px;">
                                 <option value="">Selecione uma placa</option>
                             </select>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <label style="font-size: 0.85rem; color: var(--text-muted);">De:</label>
+                                <input type="date" id="extratoPlateDateFrom" class="filter-input"
+                                    style="max-width: 150px;">
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <label style="font-size: 0.85rem; color: var(--text-muted);">Até:</label>
+                                <input type="date" id="extratoPlateDateTo" class="filter-input"
+                                    style="max-width: 150px;">
+                            </div>
+                            <button class="btn btn-outline" id="extratoPlateFilterBtn"
+                                style="display: none;">Filtrar</button>
+                            <button class="btn btn-outline" id="extratoPlateClearFilterBtn"
+                                style="display: none;">Limpar</button>
                             <button class="btn btn-primary" id="exportExtratoPlateBtn" style="display: none;">📄
                                 Exportar
                                 PDF</button>

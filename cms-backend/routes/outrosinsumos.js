@@ -6,20 +6,13 @@ const OutrosInsumo = require('../models/outrosinsumo');
 const Driver = require('../models/driver');
 const { requireAdmin, requireDriver } = require('../middleware/auth');
 const { isValidDate, isPositiveNumber } = require('../utils/validators');
+const { uploadToBlob } = require('../utils/blobStorage');
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, '../public/uploads'));
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'outros-' + uniqueSuffix + path.extname(file.originalname));
-    }
-});
+// Configure multer with memory storage for Vercel Blob compatibility
+const memoryStorage = multer.memoryStorage();
 
 const upload = multer({
-    storage,
+    storage: memoryStorage,
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
     fileFilter: (req, file, cb) => {
         const allowedTypes = /jpeg|jpg|png/;
@@ -153,9 +146,14 @@ adminRouter.put('/:id', upload.single('comprovante'), async (req, res) => {
         const unit_price = updateData.unit_price !== undefined ? updateData.unit_price : outrosInsumo.unit_price;
         updateData.total_value = quantity * unit_price;
 
-        // Handle file upload
+        // Handle file upload - use Vercel Blob storage
         if (req.file) {
-            updateData.comprovante = `/uploads/${req.file.filename}`;
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
+            const filename = `outros-insumo-${req.params.id}-${uniqueSuffix}${ext}`;
+
+            const { url } = await uploadToBlob(req.file.buffer, filename, req.file.mimetype);
+            updateData.comprovante = url;
         }
 
         const updated = await OutrosInsumo.update(req.params.id, updateData);
