@@ -23,6 +23,9 @@ const { adminRouter: adminAbastecimentoRoutes, driverRouter: driverAbastecimento
 const { adminRouter: adminOutrosInsumoRoutes, driverRouter: driverOutrosInsumoRoutes } = require('./routes/outrosinsumos');
 const paymentRoutes = require('./routes/payments');
 const abastecedorRoutes = require('./routes/abastecedores');
+const clienteMobileRoutes = require('./routes/cliente-mobile');
+const abastecedorMobileRoutes = require('./routes/abastecedor-mobile');
+const driverLocationRoutes = require('./routes/driver-location');
 const { requireDriver, requireAdmin, requireAbastecedor, requireCliente } = require('./middleware/auth');
 const Driver = require('./models/driver');
 const Freight = require('./models/freight');
@@ -81,6 +84,15 @@ app.use('/api/admin/abastecedores', abastecedorRoutes);
 app.use('/api/driver/freights', driverFreightRoutes);
 app.use('/api/driver/abastecimentos', driverAbastecimentoRoutes);
 app.use('/api/driver/outrosinsumos', driverOutrosInsumoRoutes);
+
+// Cliente mobile routes
+app.use('/api/cliente', clienteMobileRoutes);
+
+// Abastecedor mobile routes
+app.use('/api/abastecedor', abastecedorMobileRoutes);
+
+// Driver location tracking routes
+app.use('/api/driver', driverLocationRoutes);
 
 // Driver profile route
 app.get('/api/driver/profile', requireDriver, async (req, res) => {
@@ -1448,12 +1460,13 @@ async function startServer() {
         await initDatabase();
         console.log('Database initialized successfully');
 
-        app.listen(PORT, () => {
+        app.listen(PORT, '0.0.0.0', () => {
             console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║     Carrier Management System - Backend API                ║
 ╠════════════════════════════════════════════════════════════╣
-║  Server running on: http://localhost:${PORT}                  ║
+║  Server running on: http://0.0.0.0:${PORT}                     ║
+║  Also available at: http://192.168.100.11:${PORT}              ║
 ║                                                            ║
 ║  Frontend: http://localhost:${PORT}                           ║
 ║                                                            ║

@@ -199,6 +199,35 @@ const Freight = {
     },
 
     /**
+     * Find freights by client name
+     * @param {string} clientName - Client/empresa name
+     * @param {Object} filters - {date_from, date_to}
+     * @returns {Array} - List of freights with driver info
+     */
+    async findByClient(clientName, filters = {}) {
+        let sql = `
+            SELECT f.*, d.name as driver_name, d.plate as driver_plate,
+                   (f.km * f.tons * f.price_per_km_ton_transportadora) as value
+            FROM freights f
+            JOIN drivers d ON f.driver_id = d.id
+            WHERE f.client = ? AND f.status = 'complete'
+        `;
+        const values = [clientName];
+
+        if (filters.date_from) {
+            sql += ' AND f.date >= ?';
+            values.push(filters.date_from);
+        }
+        if (filters.date_to) {
+            sql += ' AND f.date <= ?';
+            values.push(filters.date_to);
+        }
+
+        sql += ' ORDER BY f.date DESC';
+        return query(sql, values);
+    },
+
+    /**
      * Find all freights (for admin)
      * @param {Object} filters - {driver_id, date_from, date_to, status}
      * @returns {Array} - List of freights with driver info

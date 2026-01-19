@@ -1596,12 +1596,12 @@ window.editFreight = async function (id) {
         </div>
         <div class="input-group">
             <label>Comprovante de Carga ${freight.comprovante_carga ? '(já anexado - enviar novo substitui)' : ''}</label>
-            <input type="file" id="editFreightCarga" class="file-input" accept="image/png, image/jpeg">
+            <input type="file" id="editFreightCarga" class="file-input" accept="image/png, image/jpeg, application/pdf, .pdf">
             ${freight.comprovante_carga ? `<a href="${freight.comprovante_carga}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📷 Ver atual</a>` : ''}
         </div>
         <div class="input-group">
             <label>Comprovante de Descarga ${freight.comprovante_descarga ? '(já anexado - enviar novo substitui)' : ''}</label>
-            <input type="file" id="editFreightDescarga" class="file-input" accept="image/png, image/jpeg">
+            <input type="file" id="editFreightDescarga" class="file-input" accept="image/png, image/jpeg, application/pdf, .pdf">
             ${freight.comprovante_descarga ? `<a href="${freight.comprovante_descarga}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📷 Ver atual</a>` : ''}
         </div>
         <div class="input-group">
@@ -1751,12 +1751,12 @@ function showAddFreightModal() {
             <input type="number" step="0.000001" id="newFreightPriceTransportadora" value="0.500000" placeholder="0.000000">
         </div>
         <div class="input-group">
-            <label>Comprovante de Carga (Foto)</label>
-            <input type="file" id="newFreightComprovanteCarga" accept=".png,.jpg,.jpeg" class="file-input">
+            <label>Comprovante de Carga (Foto/PDF)</label>
+            <input type="file" id="newFreightComprovanteCarga" accept=".png,.jpg,.jpeg,.pdf,application/pdf" class="file-input">
         </div>
         <div class="input-group">
-            <label>Comprovante de Descarga (Foto)</label>
-            <input type="file" id="newFreightComprovanteDescarga" accept=".png,.jpg,.jpeg" class="file-input">
+            <label>Comprovante de Descarga (Foto/PDF)</label>
+            <input type="file" id="newFreightComprovanteDescarga" accept=".png,.jpg,.jpeg,.pdf,application/pdf" class="file-input">
         </div>
     `, async () => {
         const formData = new FormData();
@@ -2078,7 +2078,7 @@ window.editAbastecimento = async function (id) {
         </div>
         <div class="input-group">
             <label>Comprovante ${abastecimento.comprovante_abastecimento ? '(já anexado - enviar novo substitui)' : ''}</label>
-            <input type="file" id="editAbastComprovante" class="file-input" accept="image/png, image/jpeg">
+            <input type="file" id="editAbastComprovante" class="file-input" accept="image/png, image/jpeg, application/pdf, .pdf">
             ${abastecimento.comprovante_abastecimento ? `<a href="${abastecimento.comprovante_abastecimento}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📷 Ver atual</a>` : ''}
         </div>
 `, async () => {
@@ -2196,8 +2196,8 @@ function showAddAbastecimentoModal() {
             <input type="number" step="0.0001" id="newAbastPrice" value="5.5000" placeholder="0.0000" required>
         </div>
         <div class="input-group">
-            <label>Comprovante de Abastecimento (Foto)</label>
-            <input type="file" id="newAbastComprovante" accept=".png,.jpg,.jpeg" class="file-input">
+            <label>Comprovante de Abastecimento (Foto/PDF)</label>
+            <input type="file" id="newAbastComprovante" accept=".png,.jpg,.jpeg,.pdf,application/pdf" class="file-input">
         </div>
     `, async () => {
         const formData = new FormData();
@@ -2490,7 +2490,7 @@ window.editOutrosInsumo = async function (id) {
         </div>
         <div class="input-group">
             <label>Comprovante ${insumo.comprovante ? '(já anexado - enviar novo substitui)' : ''}</label>
-            <input type="file" id="editOutrosComprovante" class="file-input" accept="image/png, image/jpeg">
+            <input type="file" id="editOutrosComprovante" class="file-input" accept="image/png, image/jpeg, application/pdf, .pdf">
             ${insumo.comprovante ? `<a href="${insumo.comprovante}" target="_blank" style="color:var(--accent-primary);font-size:0.85rem;margin-top:0.25rem;">📷 Ver atual</a>` : ''}
         </div>
 `, async () => {

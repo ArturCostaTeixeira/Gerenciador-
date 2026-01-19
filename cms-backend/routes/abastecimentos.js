@@ -11,20 +11,22 @@ const { uploadToBlob } = require('../utils/blobStorage');
 const memoryStorage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+    const imageTypes = /jpeg|jpg|png/;
+    const isImage = imageTypes.test(path.extname(file.originalname).toLowerCase()) && imageTypes.test(file.mimetype);
 
-    if (extname && mimetype) {
+    // Allow PDF files as well
+    const isPdf = path.extname(file.originalname).toLowerCase() === '.pdf' || file.mimetype === 'application/pdf';
+
+    if (isImage || isPdf) {
         return cb(null, true);
     }
-    cb(new Error('Only .png and .jpg files are allowed!'));
+    cb(new Error('Only .png, .jpg, and .pdf files are allowed!'));
 };
 
 const upload = multer({
     storage: memoryStorage,
     fileFilter,
-    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+    limits: { fileSize: 15 * 1024 * 1024 } // 15MB limit for PDFs
 });
 
 // ============================================

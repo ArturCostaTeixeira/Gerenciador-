@@ -379,6 +379,28 @@ async function initDatabase() {
         // Column already exists, ignore
     }
 
+    // Create driver_locations table for live tracking
+    await exec(`
+        CREATE TABLE IF NOT EXISTS driver_locations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            driver_id INTEGER NOT NULL,
+            freight_id INTEGER,
+            latitude REAL NOT NULL,
+            longitude REAL NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (driver_id) REFERENCES drivers(id),
+            FOREIGN KEY (freight_id) REFERENCES freights(id)
+        )
+    `);
+
+    // Add tracking_enabled column to freights for live tracking
+    try {
+        await exec(`ALTER TABLE freights ADD COLUMN tracking_enabled INTEGER DEFAULT 0`);
+        console.log('Added tracking_enabled column to freights');
+    } catch (e) {
+        // Column already exists, ignore
+    }
+
     // Create default admin if not exists
     const adminExists = await queryOne('SELECT id FROM admins WHERE username = ?', ['admin']);
     if (!adminExists) {

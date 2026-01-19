@@ -11,13 +11,12 @@ const { uploadToBlob } = require('../utils/blobStorage');
 const memoryStorage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-    // Allow images for comprovantes
+    // Allow images for all file fields
     const imageTypes = /jpeg|jpg|png/;
     const isImage = imageTypes.test(path.extname(file.originalname).toLowerCase()) && imageTypes.test(file.mimetype);
 
-    // Allow PDF for documento_frete
-    const isPdf = file.fieldname === 'documento_frete' &&
-        (path.extname(file.originalname).toLowerCase() === '.pdf' || file.mimetype === 'application/pdf');
+    // Allow PDF for all file fields (comprovante_carga, comprovante_descarga, comprovante_recebimento, documento_frete)
+    const isPdf = path.extname(file.originalname).toLowerCase() === '.pdf' || file.mimetype === 'application/pdf';
 
     if (isImage || isPdf) {
         return cb(null, true);
